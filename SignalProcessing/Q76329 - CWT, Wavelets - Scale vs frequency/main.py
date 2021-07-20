@@ -180,8 +180,8 @@ scat(slc, vlines=(fmean_nyq, {'color': 'tab:red'}), show=1)
 imshow(Wx, abs=1)
 
 #%%# Central instantaneous center frequency ##################################
-# determine central instantaneous frequency from CWT since SSQ reassigns
-# nonlinearly
+# determine central instantaneous frequency from CWT since SSQ
+# reassigns nonlinearly
 N = len(Tx0[0])
 finst_idx = np.argmax(np.abs(Wx0[:, 256]))
 psihs = wavelet1.Psih()
