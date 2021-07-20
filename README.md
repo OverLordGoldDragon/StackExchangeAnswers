@@ -1,6 +1,6 @@
-[![DOI](https://zenodo.org/badge/387701666.svg)](https://zenodo.org/badge/latestdoi/387701666)
-
 # StackExchange Answers
+
+[![DOI](https://zenodo.org/badge/387701666.svg)](https://zenodo.org/badge/latestdoi/387701666)
 
 "Watch" to be notified of new posts.
 
