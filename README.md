@@ -10,7 +10,7 @@ Reuse is permitted, with or without citation.
 
 If you wish to cite, short form:
 
-> OverLordGoldDragon, StackExchange Answers, 2020. GitHub repository, https://github.com/OverLordGoldDragon/StackExchangeAnswers/.
+> OverLordGoldDragon, StackExchange Answers, 2020. GitHub repository, https://github.com/OverLordGoldDragon/StackExchangeAnswers/. DOI: 10.5281/zenodo.5115529 
 
 BibTeX
 
@@ -20,5 +20,6 @@ BibTeX
   author={OverLordGoldDragon},
   journal={GitHub. Note: https://github.com/OverLordGoldDragon/StackExchangeAnswers/},
   year={2020},
+  doi={10.5281/zenodo.5115529},
 }
 ```
