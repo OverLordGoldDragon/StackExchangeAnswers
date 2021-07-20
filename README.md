@@ -21,7 +21,7 @@ BibTeX
   title={StackExchange Answers},
   author={OverLordGoldDragon},
   journal={GitHub. Note: https://github.com/OverLordGoldDragon/StackExchangeAnswers/},
-  year={2020},
+  year={2021},
   doi={10.5281/zenodo.5115534},
 }
 ```
