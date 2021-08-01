@@ -3,14 +3,14 @@
 import numpy as np
 from numpy.fft import ifft, ifftshift
 from kymatio.scattering1d.filter_bank import morlet_1d
-from kymatio.visuals import plot as kplot, plotscat
+from ssqueezepy.visuals import plot as _plot, plotscat
 
 def plot(*args, **kw):
     if 'title' in kw:
         kw['title'] = (kw['title'], {'fontsize': 18})
     mx = re_im_max(args[0]) * 1.05
     kw['ylims'] = (-mx, mx)
-    kplot(*args, **kw)
+    _plot(*args, **kw)
 
 def re_im_max(x):
     return max(np.abs(x.real).max(), np.abs(x.imag).max())
