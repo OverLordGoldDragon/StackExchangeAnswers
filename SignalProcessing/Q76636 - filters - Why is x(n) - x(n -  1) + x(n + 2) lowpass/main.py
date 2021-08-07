@@ -51,4 +51,4 @@ x = x - np.roll(x, 1) + np.roll(x, 2)
 xf1 = np.fft.fft(x)
 
 plot_and_save(xf0, "|X(w)|: x(n)", "WGN0.png")
-plot_and_save(xf1, "|X(w)|: x(n) - x(n - 1) + x(n + 2)", "WGN1.png")
+plot_and_save(xf1, "|X(w)|: x(n) - x(n - 1) + x(n - 2)", "WGN1.png")
