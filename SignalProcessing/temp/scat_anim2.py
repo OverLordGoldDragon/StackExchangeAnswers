@@ -1,46 +1,30 @@
 # -*- coding: utf-8 -*-
 import numpy as np
-import os
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from numpy.fft import fft, ifft, fftshift, ifftshift
 from kymatio.numpy import Scattering1D
-from kymatio.visuals import imshow, plot, make_gif
-from kymatio.toolkit import _echirp_fn, l2, echirp
-
-savedir = r"C:\Desktop\School\Deep Learning\DL_Code\signals\warp\\"
+from kymatio.toolkit import echirp
 
 #%%## Set params & create scattering object ##################################
 N = 512
 J, Q = 4, 3
+T = 2**(J + 1)
 # make CWT
 average, oversampling = False, 999
 ts = Scattering1D(shape=N, J=J, Q=Q, average=average, oversampling=oversampling,
-                  out_type='list', max_order=1)
+                  out_type='list', max_order=1, T=T, max_pad_factor=None)
 ts.psi1_f.pop(-1)
-meta = ts.meta()
 
 #%%# Create signal & warp it #################################################
 x = echirp(N, fmin=16, fmax=N/2.0)
 t = np.linspace(0, 1, N, 1)
 
-Scx0 = ts(x)
-Scx = np.vstack([c['coef'] for c in Scx0])[1:]
+meta = ts.meta()
 freqs = N * meta['xi'][meta['order'] == 1][:, 0]
 
-#%%
-
+#%%# Animate #################################################################
 class CWTAnimation(animation.TimedAnimation):
-    @staticmethod
-    def _compute_bandwidth(p, criterion_amplitude=1e-3):
-        # move peak to origin
-        mx_idx = np.argmax(p)
-        p = np.roll(p, -mx_idx)
-
-        # index of first point to drop below `criterion_amplitude`
-        decay_idx = np.where(p < p.max() * criterion_amplitude)[0][0]
-        return 2 * decay_idx / len(p)
-
     def __init__(self, ts, x, t, freqs, stride=1, alpha='6f'):
         self.ts = ts
         self.x = x
@@ -52,7 +36,8 @@ class CWTAnimation(animation.TimedAnimation):
 
         # unpack filters
         self.psi_fs = [p[0] for p in ts.psi1_f]
-        self.phi_f = ts.phi_f
+        self.phi_f = ts.phi_f[0]
+        self.phi_t = ifft(self.phi_f).real
         # conjugate since conv == cross-correlation with conjugate
         psi_ts = np.array([np.conj(ifft(p)) for p in self.psi_fs])
         self.psi_ts = psi_ts / psi_ts.real.max()
@@ -60,108 +45,43 @@ class CWTAnimation(animation.TimedAnimation):
         # compute filter params
         self.js = [p['j'] for p in ts.psi1_f]
         self.lens = [int(1.2*p['support'][0]) for p in ts.psi1_f]
-        self.bandwidths = [self._compute_bandwidth(p) for p in self.psi_fs]
         self.n_psis = len(self.psi_fs)
         self.Np = len(self.psi_fs[0])
-        self.trim = self.Np//4
+        self.trim = ts.ind_start[0]
+        self.phi_t_trim = fftshift(ifftshift(self.phi_t)[self.trim:-self.trim])
         # padded x to do CWT with
         self.xpf = fft(np.pad(x, [ts.pad_left, ts.pad_right], mode='reflect'))
 
         # take CWT without modulus
-        self.Wx = np.array([ifft(p * self.xpf)[ts.ind_start[0]:ts.ind_end[0]]
-                            for p in self.psi_fs])
+        self.Wx = np.array([ifft(p * self.xpf) for p in self.psi_fs])
         self.Ux = np.abs(self.Wx)
+        self.Sx = ifft(fft(self.Ux) * self.phi_f).real
+        start, end = ts.ind_start[0], ts.ind_end[0]
+        self.Sx = self.Sx[:, start:end]
+        self.Ux = self.Ux[:, start:end]
+        # suppress boundary effects for visuals
+        mx = self.Sx.max()
+        mx_avg = self.Sx[5].max()
+        self.Sx[0]  *= (mx_avg / mx) * 1.3
+        self.Sx[-1] *= (mx_avg / mx) * 1.3
+        # spike causes graphical glitch in converting to gif -- flatten
+        mx = self.Ux.max() * 1.02
+        self.Ux[0] *= .58 / .61
+        self.Ux[0, -1] = mx
 
         self.alpha = '6f'
-        self.title_kw = dict(weight='bold', fontsize=18, loc='left')
-        self.label_kw = dict(weight='bold', fontsize=15, labelpad=3)
+        self.title_kw = dict(weight='bold', fontsize=16, loc='left')
+        self.label_kw = dict(weight='bold', fontsize=14, labelpad=3)
         self.txt_kw = dict(x=0, y=1.015, s="", ha="left")
         self._prev_psi_idx = -1
-        self._edge_frames = 0
-        self._edge_done = False
 
-        fig, axes = plt.subplots(2, 2, figsize=(18/1.5, 15/1.5))
+        fig, axes = plt.subplots(1, 2, figsize=(18/1.7, 8/1.7))
 
-        # convolution ########################################################
-        ax = axes[0, 0]
-        self.lines00 = []
+        # |CWT|*phi_f ####################################################
+        ax = axes[0]
+        self.lines0 = []
 
-        ax.plot(t, x, color='#000000' + self.alpha)
-        self.lines00.append(ax.lines[-1])
-
-        psi = self.psi_ts[0][self.trim:-self.trim]
-        ax.plot(self.t, psi.real, color='tab:blue')
-        self.lines00.append(ax.lines[-1])
-        ax.plot(self.t, psi.imag, color='tab:orange')
-        self.lines00.append(ax.lines[-1])
-
-        dT = t.max() - t.min()
-        xmin, xmax = t.min() - dT/50, t.max() + dT/50
-        ax.set_xlim(xmin, xmax)
-        self.txt00 = ax.text(transform=ax.transAxes, **self.txt_kw, fontsize=17)
-
-        # conv output ########################################################
-        ax = axes[0, 1]
-        self.lines01 = []
-
-        mx = self.Ux.max()
-        _range = np.linspace(-mx, mx, self.N)
-        ax.plot(self.t, _range, color='tab:blue')
-        self.lines01.append(ax.lines[-1])
-        ax.plot(self.t, _range, color='tab:orange')
-        self.lines01.append(ax.lines[-1])
-        ax.plot(self.t, _range, color='black', linestyle='--')
-        self.lines01.append(ax.lines[-1])
-        for l in self.lines01:
-            l.set_data([], [])
-
-        ax.set_xlim(xmin, xmax)
-        ax.set_ylabel(r"correlation", **self.label_kw)
-        self.txt01 = ax.text(transform=ax.transAxes, **self.txt_kw, fontsize=17)
-
-        # filterbank #########################################################
-        ax = axes[1, 0]
-        zoom = -1
-        # define colors & linestyles
-        self.colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
-                       '#8c564b', '#e377c2']
-        self.colors = [self.colors[0]]*10
-
-        # determine plot parameters ######################################
-        # vertical lines (octave bounds)
-        # x-axis zoom
-        Nmax = self.Np
-        if zoom == -1:
-            xlims = (-.02 * Nmax, 1.02 * Nmax)
-        else:
-            xlims = (-.01 * Nmax / 2**zoom, .55 * Nmax / 2**zoom)
-
-        # plot filterbank ################################################
-        self.lines10 = []
-        for i, p in enumerate(self.psi_fs):
-            j = self.js[i]
-            ax.plot(p, color=self.colors[j] + self.alpha)
-            self.lines10.append(ax.lines[-1])
-
-        # axes styling
-        ax.set_xlim(xlims)
-        ax.axvline(Nmax/2, color='k', linewidth=1)
-        xticks = np.linspace(0, Nmax, 9, endpoint=True)[:-1]
-        ax.set_xticks(xticks)
-        ax.set_xticklabels([0, .125, .25, .375, .5, -.375, -.25, -.125])
-
-        self.txt10 = ax.text(transform=ax.transAxes, **self.txt_kw,
-                             fontsize=15, weight='bold')
-        ax.set_xlabel("frequency (frac of fs)", **self.label_kw)
-
-        # |CWT| heatmap ##################################################
-        ax = axes[1, 1]
-        im = ax.imshow(self.Ux, cmap='turbo', animated=True, aspect='auto',
-                       interpolation='none')
-        self.Ux_now = 0 * self.Ux
-        im.set_array(self.Ux_now)
-        self.ims11 = [im]
-
+        ax.imshow(self.Ux, cmap='turbo', aspect='auto', interpolation='none')
         ax.set_xticks(np.linspace(0, self.N, 6, endpoint=True))
         xticklabels = np.linspace(t.min(), t.max(), 6, endpoint=True)
         ax.set_xticklabels(["%.1f" % xt for xt in xticklabels])
@@ -170,91 +90,68 @@ class CWTAnimation(animation.TimedAnimation):
         ax.set_yticklabels(["%.2f" % (self.freqs[int(yt)] / self.N)
                             for yt in yticks])
 
-        ax.set_title(r"$|\psi \star x|$", **self.title_kw)
-        ax.set_xlabel("time [sec]", **self.label_kw)
-        ax.set_ylabel("frequency", **self.label_kw)
+        phi_t = 6 - 600*self.phi_t_trim
+        ax.plot(np.arange(self.N), phi_t, color='white', linewidth=2)
+        self.lines0.append(ax.lines[-1])
+
+        self.txt0 = ax.text(transform=ax.transAxes, **self.txt_kw, fontsize=15)
+
+        # output #########################################################
+        ax = axes[1]
+        im = ax.imshow(self.Sx, cmap='turbo', animated=True, aspect='auto',
+                       interpolation='none')
+        self.Sx_now = 0 * self.Sx
+        im.set_array(self.Sx_now)
+        self.ims1 = [im]
+
+        ax.set_xticks(np.linspace(0, self.N, 6, endpoint=True))
+        xticklabels = np.linspace(t.min(), t.max(), 6, endpoint=True)
+        ax.set_xticklabels(["%.1f" % xt for xt in xticklabels])
+        yticks = np.linspace(0, self.n_psis - 1, 6, endpoint=True)
+        ax.set_yticks(yticks)
+        ax.set_yticklabels(["%.2f" % (self.freqs[int(yt)] / self.N)
+                            for yt in yticks])
+        ax.set_title(r"$|\psi \star x| \star \phi$", **self.title_kw)
 
         # finalize #######################################################
-        fig.subplots_adjust(left=.04, right=.99, bottom=.02, top=.97,
-                            wspace=.15, hspace=.13)
+        fig.subplots_adjust(left=.05, right=.99, bottom=.06, top=.94,
+                            wspace=.15)
         animation.TimedAnimation.__init__(self, fig, interval=50, blit=True)
 
     def _draw_frame(self, frame_idx):
-        frame_idx_adj = frame_idx - self._edge_frames
-        step = self.stride * frame_idx_adj % self.N
-        # at right bound
-        if self.stride != 1 and (step < self.stride - 1 and frame_idx > 1
-                                 and not self._edge_done):
-            step = self.N
-            self._edge_frames += 1
-            self._edge_done = True
-        else:
-            self._edge_done = False
-        frame_idx_adj = frame_idx - self._edge_frames
-        total_step = self.stride * frame_idx_adj
+        step = self.stride * frame_idx % self.N
+        total_step = self.stride * frame_idx
         psi_idx = int(total_step / self.N)
+        # at right bound
+        if self.stride != 1 and (step < self.stride - 1 and frame_idx > 1):
+            step = self.N
+            psi_idx -= 1
 
-        # convolution ########################################################
-        offset = self.trim
-        psi = np.roll(self.psi_ts[psi_idx], offset + step)
-        psi = psi[self.trim:-self.trim]
-
-        T = self.lens[psi_idx]
+        # |CWT|*phi_f ####################################################
+        T = self.ts.phi_f['support']
         start, end = max(0, step - T//2), min(self.N, step + T//2)
-        t = self.t[start:end]
-        psi = psi[start:end]
-
-        self.lines00[1].set_data(t, psi.real)
-        self.lines00[2].set_data(t, psi.imag)
+        phi_t = 6 - 600*self.phi_t_trim
+        phi_t = np.roll(phi_t, step)[start:end]
+        self.lines0[0].set_data(np.arange(start, end), phi_t)
 
         tau = "%.2f" % ((step / self.N) * (self.t.max() - self.t.min()))
-        self.txt00.set_text(r"$\psi_{{{}}}(t - {}),\ x(t)$".format(psi_idx, tau))
+        self.txt0.set_text(r"$\phi(t - {}),\ |\psi \star x|$".format(tau))
 
-        # conv output ########################################################
-        out = self.Wx[psi_idx][:step]
-        self.lines01[0].set_data(self.t[:step], out.real)
-        self.lines01[1].set_data(self.t[:step], out.imag)
-        self.lines01[2].set_data(self.t[:step], np.abs(out))
-
-        self.txt01.set_text((r"$x \star \psi_{{{0}}},\ "
-                             r"|x \star \psi_{{{0}}}|$").format(psi_idx))
-
-        # filterbank #########################################################
-        # highlight active filter
-        if psi_idx != self._prev_psi_idx:
-            j = self.js[psi_idx]
-            self.lines10[psi_idx].set_color(self.colors[j])
-            self.lines10[psi_idx].set_linewidth(2)
-            self._prev_psi_idx = psi_idx
-
-            # revert previous active filter to inactive
-            if psi_idx != 0:
-                j_prev = self.js[psi_idx - 1]
-                self.lines10[psi_idx - 1].set_color(self.colors[j_prev] +
-                                                    self.alpha)
-                self.lines10[psi_idx - 1].set_linewidth(1)
-
-        self.txt10.set_text(("psi_{} | center freq: {:.2f}, bandwidth: {:.2f}"
-                             ).format(psi_idx, self.freqs[psi_idx] / self.N,
-                                      self.bandwidths[psi_idx]))
-
-        # |CWT| ##############################################################
-        self.Ux_now[psi_idx, start:step] = self.Ux[psi_idx, start:step]
-        self.ims11[0].set_array(self.Ux_now)
+        # output #########################################################
+        self.Sx_now[:, start:step] = self.Sx[:, start:step]
+        self.ims1[0].set_array(self.Sx_now)
 
         # finalize ###########################################################
         self._prev_psi_idx = psi_idx
-        self._drawn_artists = [*self.lines00, self.txt00, *self.lines01,
-                               *self.lines10, *self.ims11]
+        self._drawn_artists = [*self.lines0, self.txt0, *self.ims1]
 
     def new_frame_seq(self):
-        # return iter(range(1 * int(self.N // self.stride + 1)))
-        return iter(range(self.n_psis * int(self.N // self.stride + 1)))
+        return iter(range(1 * int(self.N // self.stride + 1)))
 
     def _init_draw(self):
         pass
 
 
-ani = CWTAnimation(ts, x, t, freqs, stride=4)
-ani.save('test_sub.mp4', fps=60)
+ani = CWTAnimation(ts, x, t, freqs, stride=1)
+ani.save('test_sub2.mp4', fps=80)
 plt.show()
