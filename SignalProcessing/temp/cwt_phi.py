@@ -15,7 +15,7 @@ T = 2**(J + 1)
 average, oversampling = False, 999
 ts = Scattering1D(shape=N, J=J, Q=Q, average=average, oversampling=oversampling,
                   out_type='list', max_order=1, T=T, max_pad_factor=None)
-ts.psi1_f.pop(-1)
+ts.psi1_f.pop(-1)  # drop last for niceness
 
 #%%# Create signal & warp it #################################################
 x = echirp(N, fmin=16, fmax=N/2.0)

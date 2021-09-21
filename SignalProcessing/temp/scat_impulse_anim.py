@@ -213,7 +213,7 @@ for i in (0, 1):
 # make into gif
 savepath = os.path.join(savedir, 'warp_sc.gif')
 make_gif(savedir, savepath, duration=500, start_end_pause=0, overwrite=1,
-         delimiter=base_name, ext=ext)
+         delimiter=base_name, ext=ext, delete_images=True)
 
 #%%# Instantaneous ridges ####################################################
 from ssqueezepy import ssq_cwt

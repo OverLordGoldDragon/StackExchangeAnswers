@@ -15,7 +15,6 @@ average, oversampling = False, 999
 ts = Scattering1D(shape=N, J=J, Q=Q, average=average, oversampling=oversampling,
                   out_type='list', max_order=1)
 ts.psi1_f.pop(-1)  # drop last for niceness
-meta = ts.meta()
 
 #%%# Create signal & warp it #################################################
 x = echirp(N, fmin=16, fmax=N/2.0)
@@ -23,6 +22,8 @@ t = np.linspace(0, 1, N, 1)
 
 Scx0 = ts(x)
 Scx = np.vstack([c['coef'] for c in Scx0])[1:]
+
+meta = ts.meta()
 freqs = N * meta['xi'][meta['order'] == 1][:, 0]
 
 #%% Animate ##################################################################

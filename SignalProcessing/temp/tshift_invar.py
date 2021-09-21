@@ -133,7 +133,8 @@ for i in (0, 2):
 # make into gif
 savepath = os.path.join(savedir, f'{base_name}.gif')
 make_gif(loaddir=savedir, savepath=savepath, ext=images_ext, duration=750,
-         overwrite=overwrite, delimiter=base_name, verbose=1, start_end_pause=0)
+         overwrite=overwrite, delimiter=base_name, verbose=1, start_end_pause=0,
+         delete_images=True)
 
 #%%# plot superimposed #######################################################
 def plot_superimposed(g0, g1, T, ax):
@@ -142,18 +143,19 @@ def plot_superimposed(g0, g1, T, ax):
         plot([t_idx, t_idx], [g0[t_idx], g1[t_idx]],
              color='tab:red', linestyle='--', ax=ax)
 
-    title = "T={:.2f} | reldist={:.2f}".format(T / N, float(l2(g0, g1)))
+    title = ("T={:.2f} | reldist={:.2f}".format(T / N, float(l2(g0, g1))),
+             {'fontsize': 20})
     plotscat(g0, title=title, ax=ax)
     plotscat(g1, xlims=(-len(g0)/40, 1.03*(len(g0) - 1)),
              ylims=(0, 1.03*max(g0.max(), g1.max())), ax=ax)
 
 mx_idx = np.argmax(Scx00.sum(axis=-1))
 
-fig, axes = plt.subplots(1, 2, figsize=(24, 7))
+fig, axes = plt.subplots(1, 2, figsize=(18, 7))
 plot_superimposed(Scx00[mx_idx], Scx01[mx_idx], T0, axes[0])
 plot_superimposed(Scx10[mx_idx], Scx11[mx_idx], T1, axes[1])
 
-plt.subplots_adjust(wspace=.06)
+plt.subplots_adjust(wspace=.09)
 plt.show()
 
 #%% Reldist vs T #############################################################
@@ -172,16 +174,16 @@ reldist_all = [l2(S0, S1).squeeze() for S0, S1 in zip(Scx0_all, Scx1_all)]
 #%% plot
 T_all_sec = np.array(T_all) / N
 
-fig, axes = plt.subplots(1, 2, figsize=(24, 7))
+fig, axes = plt.subplots(1, 2, figsize=(18, 7))
 plot(T_all_sec, reldist_all, ax=axes[0],
      hlines=(0, dict(color='tab:red', linestyle='--', linewidth=1)),
-     title="Scattering coefficient relative distance",
+     title=("Scattering coefficient relative distance", {'fontsize': 20}),
      xlabel="T [sec]", ylabel="reldist")
 
 T_all_sec_log = np.log2(T_all_sec)
 reldist_all_log = np.log10(reldist_all)
 plot(T_all_sec_log, reldist_all_log, ax=axes[1],
-     title="logscaled",
+     title=("logscaled", {'fontsize': 20}),
      xlabel="log2(T) [sec]", ylabel="log10(reldist)")
 
 plt.subplots_adjust(wspace=.1)

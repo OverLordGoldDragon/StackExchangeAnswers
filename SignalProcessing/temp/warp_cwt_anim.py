@@ -20,12 +20,12 @@ USE_GPU = bool('cuda' if torch.cuda.is_available() else 'cpu')
 N, f = 2048, 64
 J, Q = 8, 8
 T = 512
+# increase freq width to improve temporal localization
+# to not confuse ill low-freq localization with warp effects, for echirp
 ts = Scattering1D(shape=N, J=J, Q=Q, average=False, oversampling=999,
-                  T=T, out_type='list')
+                  T=T, out_type='list', r_psi=.82)
 if USE_GPU:
     ts.cuda()
-meta = ts.meta()
-freqs = N * meta['xi'][meta['order'] == 1][:, 0]
 
 #%%# configure time-warps ####################################################
 K_init = .01
@@ -122,12 +122,14 @@ class PlotImshowAnimation(animation.TimedAnimation):
     def _init_draw(self):
         pass
 
-
 #%%# Run on each signal ######################################################
 def extend(x):
     return np.array(list(x) + 6*[x[-1]])
 
-def run(x_all, adtau_max_all, name):
+def run(x_all, adtau_max_all, ts, name):
+    meta = ts.meta()
+    freqs = N * meta['xi'][meta['order'] == 1][:, 0]
+
     Scx_all0 = [ts(x) for x in x_all]
     Scx_all = np.vstack([(np.vstack([c['coef'].cpu().numpy() for c in Scx]
                                     )[meta['order'] == 1])[None]
@@ -144,24 +146,31 @@ def run(x_all, adtau_max_all, name):
     plt.show()
 
 #%% echirp
-x_all = np.cos(_echirp_fn(fmin=64, fmax=N/8)(t - tau_all))
-run(x_all, adtau_max_all, "echirp")
-
+_t = (t - tau_all)
+a0 = np.cos(2*np.pi * 3.7 * _t)
+x_all = np.cos(_echirp_fn(fmin=40, fmax=N/8)(_t)) * a0
+#%%
+run(x_all, adtau_max_all, ts, "echirp")
 #%% visualize warps for sine case with lower freq
 def _tt(title):
     return (title, {'fontsize': 20})
 
-fig, axes = plt.subplots(1, 2, figsize=(19, 6))
-x_all_viz = np.cos(2*np.pi * 64 * (t - tau_all))
+fig, axes = plt.subplots(1, 2, figsize=(18, 7))
+x_all_viz = x_all#np.cos(2*np.pi * 64 * (t - tau_all))
 imshow(x_all_viz, title=_tt("x(t - tau(t)) for all tau"), show=0, ax=axes[0],
-       xlabel="time", ylabel="max(|tau'|)", yticks=adtau_max_all, xticks=t)
+       xlabel="time", ylabel="max(|tau'|)", yticks=adtau_max_all)
 imshow(tau_all, title=_tt("all tau(t)"), show=0, ax=axes[1],
-       xlabel="time", ylabel="index", xticks=t)
-plt.subplots_adjust(wspace=.12)
+       xlabel="time", yticks=0)
+
+for ax in axes:
+    ax.set_xticks(np.linspace(0, len(t), 6))
+    ax.set_xticklabels([0, .2, .4, .6, .8, 1])
+
+plt.subplots_adjust(wspace=.03)
 fig.savefig("sine_warp.png", bbox_inches='tight')
 plt.show()
 plt.close(fig)
 
 #%% sine
 x_all = np.cos(2*np.pi * f * (t - tau_all))
-run(x_all, adtau_max_all, "sine")
+run(x_all, adtau_max_all, ts, "sine")

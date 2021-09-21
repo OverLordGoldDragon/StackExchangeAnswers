@@ -34,15 +34,11 @@ if USE_GPU:
     for ts in ts_all:
         ts.cuda()
 
-#%%
-K_init = .01
-n_pts = 64
-t = np.linspace(0, 1, N, 0)
-
 #%%###########################################################################
 meta = meta_all[0]
 freqs = N * meta['xi'][meta['order'] == 1][:, 0]
 #%%
+t = np.linspace(0, 1, N, 0)
 _tau = tau(t, K=.012)
 x0 = np.cos(_echirp_fn(fmin=32, fmax=N/8)(t))
 x1 = np.cos(_echirp_fn(fmin=32, fmax=N/8)(t - _tau))
