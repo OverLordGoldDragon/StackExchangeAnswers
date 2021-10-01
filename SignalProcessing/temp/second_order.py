@@ -77,7 +77,7 @@ def cwt_and_viz(x, ts, show_max_rows=False):
         mx_idx2 = np.argmax(np.sum(U2**2, axis=(1, 2)))
         mx_idx1 = np.argmax(np.sum(U2[mx_idx2]**2, axis=-1))
         xi1, xi2 = xi1s[mx_idx1], xi2s[mx_idx2]
-        title = "|CWT(x, xi1={:.1f} Hz, xi2={:.1f} Hz)| (max row)".format(
+        title = "|CWT(|CWT(x, xi1={:.1f} Hz)|, xi2={:.1f} Hz)| (max row)".format(
             xi1, xi2)
         U2_max_row = U2[mx_idx2, mx_idx1]
 
@@ -87,8 +87,7 @@ def cwt_and_viz(x, ts, show_max_rows=False):
 
 #%%
 N = 2049
-kw = dict(shape=N, J=9, Q=8, max_pad_factor=None, oversampling=999,
-          max_order=1)
+kw = dict(shape=N, J=9, Q=8, max_pad_factor=None, oversampling=999, max_order=1)
 ts = Scattering1D(**kw)
 
 #%%
@@ -102,7 +101,7 @@ c = np.cos(2*np.pi * f0 * t)
 a = (1 + (np.cos(2*np.pi * f1 * t))) / 2
 x = a * c
 
-title="$\cos(2\pi {} t) \cdot (1 + \cos(2\pi {} t))/2$".format(f0, f1)
+title = "$\cos(2\pi {} t) \cdot (1 + \cos(2\pi {} t))/2$".format(f0, f1)
 plot(t, x, show=1, title=title, xlabel="time [sec]")
 #%%
 cwt_and_viz(x, ts, show_max_rows=1)
