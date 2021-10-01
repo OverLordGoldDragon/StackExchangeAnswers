@@ -60,9 +60,6 @@ def gauss(n_pts, mn, mx, width=20):
     g += mn
     return g
 
-x = np.linspace(2.5, 8.5, n_pts, endpoint=1)
-y = np.linspace(0.3, 6.3, n_pts, endpoint=1)
-z = np.linspace(2.0, 2.0, n_pts, endpoint=1)
 x = np.logspace(np.log10(2.5), np.log10(8.5), n_pts, endpoint=1)
 y = np.logspace(np.log10(0.3), np.log10(6.3), n_pts, endpoint=1)
 z = np.logspace(np.log10(2.0), np.log10(2.0), n_pts, endpoint=1)
