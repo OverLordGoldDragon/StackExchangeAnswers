@@ -75,7 +75,7 @@ assert len(x) == len(packed_viz), (len(x), len(packed_viz))
 
 #%% Make gif  ################################################################
 t0 = dtime()
-gif_jtfs_3d(packed_viz, base_name='trumpet3d', images_ext='.png',
+gif_jtfs_3d(packed_viz, base_name='jtfs3d_trumpet', images_ext='.png',
             overwrite=1, save_images=1, angles=eyes, gif_kw=dict(duration=50))
 print(dtime() - t0)
 
