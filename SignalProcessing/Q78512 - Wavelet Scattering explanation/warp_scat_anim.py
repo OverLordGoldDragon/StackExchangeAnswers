@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
-"""Scattering unwarped vs warped echirp GIF, sweeping `T`."""
-# https://dsp.stackexchange.com/q/78508/50076 ################################
+"""Scattering unwarped vs warped echirp GIF."""
+# https://dsp.stackexchange.com/q/78512/50076 ################################
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
@@ -18,13 +18,16 @@ import torch
 USE_GPU = bool('cuda' if torch.cuda.is_available() else 'cpu')
 
 #%%###########################################################################
-N = 2048
+N, f = 2048, 64
+
+#%%###########################################################################
 J, Q = 8, 8
+T = 512
 T_all = np.arange(1, N/2 + 1, 8)
 T_all = np.logspace(np.log2(1), np.log2(N - 1), N//8, base=2, endpoint=True)
 
 kw = dict(shape=N, J=J, Q=Q, average=True, oversampling=999, out_type='array',
-          max_order=1, max_pad_factor=None, r_psi=.82)
+          max_order=1, max_pad_factor=None)
 ts_all = [Scattering1D(**kw, T=T) for T in T_all]
 meta_all = [ts.meta() for ts in ts_all]
 
@@ -38,9 +41,8 @@ freqs = N * meta['xi'][meta['order'] == 1][:, 0]
 #%%
 t = np.linspace(0, 1, N, 0)
 _tau = tau(t, K=.012)
-a0 = np.cos(2*np.pi * 3.7 * (t - _tau))
-x0 = np.cos(_echirp_fn(fmin=40, fmax=N/8)(t)) * a0
-x1 = np.cos(_echirp_fn(fmin=40, fmax=N/8)(t - _tau)) * a0
+x0 = np.cos(_echirp_fn(fmin=32, fmax=N/8)(t))
+x1 = np.cos(_echirp_fn(fmin=32, fmax=N/8)(t - _tau))
 #%%
 Scx_all0 = np.array([ts(x0)[1:].cpu().numpy() for ts in ts_all])
 Scx_all1 = np.array([ts(x1)[1:].cpu().numpy() for ts in ts_all])
@@ -48,7 +50,7 @@ Scx_all1 = np.array([ts(x1)[1:].cpu().numpy() for ts in ts_all])
 dists = np.array([l2(S0, S1) for S0, S1 in zip(Scx_all0, Scx_all1)]).squeeze()
 plot(T_all, dists, ylims=(0, None), show=1)
 
-#%% extend frames
+#%% extend
 def extend(x):
     return np.array(6*[x[0]] + list(x) + 6*[x[-1]])
 
@@ -130,8 +132,8 @@ class PlotImshowAnimation(animation.TimedAnimation):
         self.txt1.set_text(_txt(1, T_sec))
 
         # plot ###############################################################
-        self.lines0[0].set_data(self.T_all_sec_log[:frame_idx + 1],
-                                self.plot_frame[:frame_idx + 1])
+        self.lines0[0].set_data(self.T_all_sec_log[:frame_idx],
+                                self.plot_frame[:frame_idx])
 
         # finalize ###########################################################
         self._drawn_artists = [*self.ims0, self.txt0, *self.ims1, self.txt1,
@@ -149,5 +151,5 @@ vmax = max(Scx_all0.max(), Scx_all1.max())*.98
 
 ani = PlotImshowAnimation(imshow_frames0, imshow_frames1, plot_frame, T_all,
                           vmax)
-ani.save('warp_scat_T.mp4', fps=15, savefig_kwargs=dict(pad_inches=0))
+ani.save('warp_scat.mp4', fps=15, savefig_kwargs=dict(pad_inches=0))
 plt.show()
