@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Scattering vs CWT: impulse response GIF, echirp warping GIF."""
 # https://dsp.stackexchange.com/q/78512/50076 ################################
+# https://dsp.stackexchange.com/q/78514/50076 ################################
 import numpy as np
 import os
 import matplotlib.pyplot as plt

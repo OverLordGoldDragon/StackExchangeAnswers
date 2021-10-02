@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Second-order unaveraged scattering on A.M. cosine and White Gaussian Noise."""
 # https://dsp.stackexchange.com/q/78512/50076 ################################
+# https://dsp.stackexchange.com/q/78514/50076 ################################
 import numpy as np
 from numpy.fft import fft, ifft
 import matplotlib.pyplot as plt
