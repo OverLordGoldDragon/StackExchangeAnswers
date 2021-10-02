@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """Scattering unwarped vs warped echirp GIF."""
+# https://dsp.stackexchange.com/q/78508/50076 ################################
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation

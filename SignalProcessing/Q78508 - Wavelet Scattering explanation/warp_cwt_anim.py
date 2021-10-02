@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """Sinusoid and echirp warping CWT GIF."""
+# https://dsp.stackexchange.com/q/78508/50076 ################################
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation

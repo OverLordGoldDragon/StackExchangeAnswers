@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """Illustrating time-shift invariance."""
+# https://dsp.stackexchange.com/q/78508/50076 ################################
 import numpy as np
 import os
 import matplotlib.pyplot as plt
