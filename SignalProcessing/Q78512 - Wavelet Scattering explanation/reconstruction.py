@@ -2,6 +2,7 @@
 """Scalogram gradient-based reconstruction on exponential chirp GIF."""
 # https://dsp.stackexchange.com/q/78512/50076 ################################
 # https://dsp.stackexchange.com/q/78514/50076 ################################
+# https://dsp.stackexchange.com/q/78530/50076 ################################
 import numpy as np
 import torch
 from kymatio import Scattering1D
