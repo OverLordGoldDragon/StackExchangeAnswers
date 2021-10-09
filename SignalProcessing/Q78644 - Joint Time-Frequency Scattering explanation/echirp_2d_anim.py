@@ -1,14 +1,16 @@
 # -*- coding: utf-8 -*-
 """Visualize JTFS of exponential chirp: as GIF of joint slices (2D)."""
+import numpy as np
 from kymatio.numpy import TimeFrequencyScattering1D
 from kymatio.toolkit import echirp, energy
 from kymatio.visuals import plot, imshow
 from kymatio import visuals
 
 #%% Generate echirp and create scattering object #############################
-N = 4096
+N = 4097
 # span low to Nyquist; assume duration of 1 second
 x = echirp(N, fmin=64, fmax=N/2)
+x = np.cos(2*np.pi * (N//16) * np.linspace(0, 1, N, 1))
 
 # 9 temporal octaves
 # largest scale is 2**9 [samples] / 4096 [samples / sec] == 125 ms
@@ -63,8 +65,8 @@ jmeta = jtfs.meta()
 savedir = ''
 # time between GIF frames (ms)
 duration = 150
-visuals.gif_jtfs(Scx, jmeta, savedir=savedir, base_name='jtfs_echirp',
-                 save_images=0, overwrite=1, gif_kw={'duration': duration})
+visuals.gif_jtfs_2d(Scx, jmeta, savedir=savedir, base_name='jtfs_sine',
+                    save_images=0, overwrite=1, gif_kw={'duration': duration})
 # Notice how -1 spin coefficients contain nearly all the energy
 # and +1 barely any; this is FDTS discriminability.
 # For ideal FDTS and JTFS, +1 will be all zeros.
