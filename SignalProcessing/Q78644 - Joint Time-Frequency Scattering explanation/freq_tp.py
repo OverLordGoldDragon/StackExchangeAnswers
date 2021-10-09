@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """Visualize log-frequency shift."""
+# https://dsp.stackexchange.com/q/78622/50076 ################################
 import numpy as np
 from kymatio.numpy import Scattering1D
 from kymatio.visuals import imshow, make_gif

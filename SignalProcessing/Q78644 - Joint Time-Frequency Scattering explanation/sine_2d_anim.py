@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """Visualize JTFS of pure sine: as GIF of joint slices (2D)."""
+# https://dsp.stackexchange.com/q/78622/50076 ################################
 import numpy as np
 from kymatio.numpy import TimeFrequencyScattering1D
 from kymatio.toolkit import energy

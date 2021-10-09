@@ -3,6 +3,7 @@
 Visualize JTFS of exponential chirp: as GIF of coefficients
 superimposed with wavelets.
 """
+# https://dsp.stackexchange.com/q/78622/50076 ################################
 import numpy as np
 from kymatio.numpy import TimeFrequencyScattering1D
 from kymatio.toolkit import echirp, pack_coeffs_jtfs

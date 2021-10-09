@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """JTFS of Frequency-Dependent Time Shifts."""
+# https://dsp.stackexchange.com/q/78622/50076 ################################
 import numpy as np
 import torch
 from kymatio.torch import Scattering1D, TimeFrequencyScattering1D

@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """Visualize JTFS of real data: as GIF of 3D slices unfolded over time."""
+# https://dsp.stackexchange.com/q/78622/50076 ################################
 import numpy as np
 import torch
 import librosa

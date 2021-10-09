@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """Visualize joint JTFS filterbank (2D)."""
+# https://dsp.stackexchange.com/q/78622/50076 ################################
 from kymatio.numpy import TimeFrequencyScattering1D
 from kymatio.visuals import make_gif
 from kymatio import visuals

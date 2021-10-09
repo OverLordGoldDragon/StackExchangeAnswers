@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """Visualize JTFS of exponential chirp: as GIF of 3D slices unfolded over time."""
+# https://dsp.stackexchange.com/q/78622/50076 ################################
 from kymatio.numpy import TimeFrequencyScattering1D
 from kymatio.toolkit import echirp, pack_coeffs_jtfs
 from kymatio.visuals import gif_jtfs_3d
