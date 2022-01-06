@@ -12,14 +12,14 @@ Reuse is permitted, with or without citation.
 
 If you wish to cite, short form:
 
-> OverLordGoldDragon, StackExchange Answers, 2021. GitHub repository, https://github.com/OverLordGoldDragon/StackExchangeAnswers/. DOI: 10.5281/zenodo.5115534
+> John Muradeli, StackExchange Answers, 2021. GitHub repository, https://github.com/OverLordGoldDragon/StackExchangeAnswers/. DOI: 10.5281/zenodo.5115534
 
 BibTeX
 
 ```bibtex
 @article{OverLordGoldDragon2020StackExchangeAnswers,
   title={StackExchange Answers},
-  author={OverLordGoldDragon},
+  author={John Muradeli},
   journal={GitHub. Note: https://github.com/OverLordGoldDragon/StackExchangeAnswers/},
   year={2021},
   doi={10.5281/zenodo.5115534},
