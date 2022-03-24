@@ -6,7 +6,7 @@
 import numpy as np
 import torch
 from kymatio import Scattering1D
-from kymatio.toolkit import echirp, l2, l1
+from kymatio.toolkit import echirp, rel_l2, rel_l1
 from kymatio.visuals import plot
 from ssqueezepy import ssq_cwt, Wavelet
 
@@ -36,7 +36,7 @@ x /= torch.max(torch.abs(x))
 x.requires_grad = True
 optimizer = torch.optim.SGD([x], lr=500, momentum=.9, nesterov=True)
 loss_fn = torch.nn.MSELoss()
-dist_fn = l2
+dist_fn = rel_l2
 
 losses, losses_recon = [], []
 x_recons = []
@@ -55,7 +55,7 @@ for i in range(n_iters):
 
     if i > loss_switch_iter:
         loss_fn = torch.nn.L1Loss()
-        dist_fn = l1
+        dist_fn = rel_l1
         if i == loss_switch_iter + 1 or i % 5 == 0:
             factor = 2 if i == 51 else 2
             for g in optimizer.param_groups:
