@@ -1,8 +1,8 @@
 % Answer to https://dsp.stackexchange.com/q/86181/50076
 %% Configure ################################################################
-fs = 400;             % (in Hz)  anything works
-duration = 5;         % (in sec) anything works
-padtype = 'reflect';  % anything (supported) works
+fs = 400;                % (in Hz)  anything works
+duration = 5;            % (in sec) anything works
+padtype = 'reflection';  % anything (supported) works
 
 % get power between these frequencies
 freq_min = 50;   % (in Hz)
@@ -12,27 +12,32 @@ freq_max = 150;  % (in Hz)
 % make signal & filterbank
 % assume this is Amperes passing through 1 Ohm resistor; P = I^2*R, E = P * T
 % check actual physical units for your specific application and adjust accordingly
+rng('default')
 x = randn(1, fs * duration);
-fb = cwtfilterbank('Wavelet', 'amor', 'SignalLength', N, 'VoicesPerOctave', 11, ...
-                   'SamplingFrequency', fs, 'Boundary', padtype);
+fb = cwtfilterbank('Wavelet', 'amor', 'SignalLength', fs * duration, ...
+                   'VoicesPerOctave', 11, 'SamplingFrequency', fs, ...
+                   'Boundary', padtype);
 
 % transform, get frequencies
-[Wx, freqs] = cwt(x);
+[Wx, freqs] = fb.wt(x);
 
 % fetch coefficients according to `freq_min_max`
-Wx_spec = Wx((freq_min < freqs) + (freqs < freq_max), :);
+Wx_spec = Wx((freq_min < freqs) & (freqs < freq_max), :);
 
 %% "Adjustments" ############################################################
 % See "Practical adjustments" in the answer
-% We shouldn't have to do this - the wavelets should be normalized such that
-% it's automatically accounted for.
 
 % fetch wavelets in freq domain, compute ET & ES transfer funcs, fethch maxima
-psi_fs = fb.wavelets;  % fetch wavelets in freq domain
+psi_fs = fb.PsiDFT;  % fetch wavelets in freq domain
 ET_tfn = sum(abs(psi_fs).^2, 1);
 ES_tfn = abs(sum(psi_fs, 1)).^2;
-ET_adj = max(ET_tfn);
-ES_adj = max(ES_tfn);
+% real-valued case adjustment:
+%   - ET since we operate on half of spectrum (half as many coeffs)
+%   - ES since `.real` halves spectrum, quartering energy on real side;
+%     note, for this to work right, the filterbank must be halved at Nyquist
+%     by design (which should also be done for sake of temporal decay)
+ET_adj = max(ET_tfn) / 2;
+ES_adj = max(ES_tfn) / 4;
 
 %% Compute energy & power ###################################################
 % compute energy & power (discrete)
@@ -41,7 +46,7 @@ ES_disc = sum(abs(real(sum(Wx_spec, 1))).^2, 'all') / ES_adj;
 PT_disc = ET_disc / length(x);
 PS_disc = ES_disc / length(x);
 
-% compute energy & power(physical); estimate underlying continuous waveform via
+% compute energy & power (physical); estimate underlying continuous waveform via
 % Riemann integration
 sampling_period = 1 / fs;
 ET_phys = ET_disc * sampling_period * duration;
