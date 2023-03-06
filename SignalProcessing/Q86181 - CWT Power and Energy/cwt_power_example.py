@@ -56,35 +56,35 @@ PS_disc = ES_disc / len(x)
 # compute energy & power (physical); estimate underlying continuous waveform via
 # Riemann integration
 sampling_period = 1 / fs
-ET_phys = ET_disc * sampling_period * duration
-ES_phys = ES_disc * sampling_period * duration
+ET_phys = ET_disc * sampling_period
+ES_phys = ES_disc * sampling_period
 PT_phys = ET_phys / duration
 PS_phys = ES_phys / duration
 
 # repeat for original signal
 Ex_disc = E(x)
 Px_disc = Ex_disc / len(x)
-Ex_phys = Ex_disc * sampling_period * duration
+Ex_phys = Ex_disc * sampling_period
 Px_phys = Ex_phys / duration
 
 #%% Report ###################################################################
 print(("Between {:d} and {:d} Hz, DISCRETE:\n"
-       "{:<9.6g} -- energy of transform\n"
-       "{:<9.6g} -- energy of signal\n"
-       "{:<9.6g} -- power of transform\n"
-       "{:<9.6g} -- power of signal\n"
+       "{:<9.6g} -- energy     (transform)\n"
+       "{:<9.6g} -- energy     (signal)\n"
+       "{:<9.6g} -- mean power (transform)\n"
+       "{:<9.6g} -- mean power (signal)\n"
        ).format(freq_min, freq_max, ET_disc, ES_disc, PT_disc, PS_disc))
 
 print(("Between {:d} and {:d} Hz, PHYSICAL (via Riemann integration):\n"
-       "{:<9.6g} Joules -- energy of transform\n"
-       "{:<9.6g} Joules -- energy of signal\n"
-       "{:<9.6g} Watts  -- power of transform\n"
-       "{:<9.6g} Watts  -- power of signal\n"
+       "{:<9.6g} Joules -- energy     (transform)\n"
+       "{:<9.6g} Joules -- energy     (signal)\n"
+       "{:<9.6g} Watts  -- mean power (transform)\n"
+       "{:<9.6g} Watts  -- mean power (signal)\n"
        ).format(freq_min, freq_max, ET_phys, ES_phys, PT_phys, PS_phys))
 
 print(("Original signal:\n"
-       "{:<9.6g} -- energy (discrete)\n"
-       "{:<9.6g} -- power  (discrete)\n"
-       "{:<9.6g} Joules -- energy (physical)\n"
-       "{:<9.6g} Watts  -- power  (physical)\n").format(
+       "{:<9.6g}        -- energy      (discrete)\n"
+       "{:<9.6g}        -- mean power  (discrete)\n"
+       "{:<9.6g} Joules -- energy      (physical)\n"
+       "{:<9.6g} Watts  -- mean power  (physical)\n").format(
            Ex_disc, Px_disc, Ex_phys, Px_phys))

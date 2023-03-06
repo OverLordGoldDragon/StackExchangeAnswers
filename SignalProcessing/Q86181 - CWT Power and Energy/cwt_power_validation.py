@@ -20,7 +20,7 @@ psi_fs[:, 128].imag = 0
 
 
 #%% Compute "transfer functions" #############################################
-ET_tfn = np.sum([np.abs(p)**2 for p in psi_fs], axis=0)
+ET_tfn = np.sum(np.abs(psi_fs)**2, axis=0)
 ES_tfn = np.abs(np.sum(psi_fs, axis=0))**2
 
 #%% Run tests ################################################################
