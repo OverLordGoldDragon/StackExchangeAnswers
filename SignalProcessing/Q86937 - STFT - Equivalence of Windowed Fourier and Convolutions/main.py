@@ -1,10 +1,12 @@
 # -*- coding: utf-8 -*-
 # https://dsp.stackexchange.com/q/85745/50076
 import numpy as np
+import matplotlib.pyplot as plt
 from scipy.signal.windows import dpss
 from numpy.fft import fft, ifft, fftshift, ifftshift
+
 from ssqueezepy import stft
-from ssqueezepy.visuals import plot, plotscat
+from ssqueezepy.visuals import plot, plotscat, imshow
 
 #%%############################################################################
 # Helpers
@@ -130,3 +132,24 @@ pt0 = ifftshift(ifft(fbank_f0[f0]))
 pt1 = ifftshift(ifft(fbank_f0[f1]))
 plot_complex(pt0, f0)
 plot_complex(pt1, f1)
+
+#%% Demo sines
+N = 128
+t = np.linspace(0, 1, 128, 1)
+x =  np.cos(2*np.pi * t * 4)
+x += np.cos(2*np.pi * t * 20)
+x += np.cos(2*np.pi * t * 40)
+x += np.cos(2*np.pi * t * 60)
+
+window = dpss(128, 128//8, sym=False)
+
+for n_fft in (128, 256):
+    Sx0 = stft(x, modulated=0, n_fft=n_fft, window=window)[::-1]
+    Sx1 = stft(x, modulated=1, n_fft=n_fft, window=window)[::-1]
+
+    fig, axes = plt.subplots(1, 2, sharey=True, figsize=(14, 6),
+                             layout='constrained')
+    imshow(Sx0.real, fig=fig, ax=axes[0], show=0,
+           title=f"STFT.real, n_fft={n_fft} | standard")
+    imshow(Sx1.real, fig=fig, ax=axes[1], show=1,
+           title=f"STFT.real, n_fft={n_fft} | improved")
