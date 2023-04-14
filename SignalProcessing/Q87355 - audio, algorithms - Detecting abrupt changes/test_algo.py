@@ -1,13 +1,22 @@
 # -*- coding: utf-8 -*-
 # https://dsp.stackexchange.com/q/87355/50076
-import numpy as np
-from utils87355 import (
-    find_audio_change_timestamps, load_data, data_labels, data_dir
-)
-
 # USER CONFIGS
 TOLERANCE = 0.05
-VIZ_PREDS = False
+VIZ_PREDS = 1
+GPU = 0
+FULL_GPU = 0
+PRINT_TIMES = 1
+
+import os
+os.environ['SSQ_GPU'] = '1' if GPU else '0'
+os.environ['FULL_GPU'] = '1' if FULL_GPU else '0'
+
+import numpy as np
+from utils87355 import (
+    find_audio_change_timestamps, handle_wavelet, pad_input_make_t,
+    load_data, data_labels, data_dir,
+)
+from timeit import default_timer as dtime
 
 #%%############################################################################
 # Configure
@@ -18,8 +27,27 @@ cfg = dict(
     carve_th_scaling=1/3,
     fmax_idx_frac=400/471,
     silence_th_scaling=50,
-    final_pred_n_peaks=2,
+    final_pred_n_peaks=1,
+    escaling=(1, 1, 1),
 )
+
+#%%############################################################################
+# Make reusables
+# --------------
+Nmax = max(len(load_data(i)[0]) for i in range(len(data_labels)))
+fs = load_data(0)[1]  # assumes same for all
+Mmax = len(pad_input_make_t(np.arange(Nmax), fs)[0])
+N_ref = Nmax
+reusables = handle_wavelet(
+    wavelet=cfg['wavelet'],
+    fs=fs,
+    M=Mmax,
+    ssq_precfg=dict(scales='log', padtype=None),
+    fmax_idx_frac=cfg['fmax_idx_frac'],
+    silence_interval_samples=int(.2*fs),
+    escaling=cfg['escaling'],
+)
+other_cfg = dict(reusables=reusables, fs=fs, N_ref=N_ref)
 
 #%%############################################################################
 # Run
@@ -33,6 +61,8 @@ idxs_all = idxs_train + idxs_test
 
 # get predictions
 for example_idx in idxs_all:
+    if PRINT_TIMES:
+        t0 = dtime()
     # load data
     x, fs, labels = load_data(example_idx)
 
@@ -40,13 +70,16 @@ for example_idx in idxs_all:
     viz_labels = ((example_idx, labels) if VIZ_PREDS else
                   None)
     preds = find_audio_change_timestamps(
-        x, fs=fs, **cfg, viz_labels=viz_labels)[0]
+        x, **other_cfg, **cfg, viz_labels=viz_labels)[0]
 
     # append
     d = (results_train if example_idx in idxs_train else
          results_test)
     d['preds'].append(preds)
-    print(end=".", flush=True)
+    if PRINT_TIMES:
+        print("%.3g" % (dtime() - t0) + " sec", flush=True)
+    else:
+        print(end=".", flush=True)
 
 #%%############################################################################
 # Calculate score

@@ -1,13 +1,14 @@
 # -*- coding: utf-8 -*-
+import os
 import numpy as np
-from numpy.fft import fft2, ifft2, fft, ifft, ifftshift
+from numpy.fft import (fft2 as nfft2, ifft2 as nifft2, fft as nfft,
+                       ifft as nifft, ifftshift as nifftshift)
 import matplotlib.pyplot as plt
 
-from ssqueezepy import Wavelet, ssq_cwt, cwt
+from ssqueezepy import Wavelet, ssq_cwt, ssq_stft, cwt, plot
 from pathlib import Path
 from scipy.io import wavfile
-from ssqueezepy import plot  # TODO
-from scipy.signal.windows import dpss; from ssqueezepy import ssq_stft  # TODO
+# from scipy.signal.windows import dpss
 
 __all__ = [
     'wav_cfgs',
@@ -48,6 +49,44 @@ wav_cfgs = {'time': 20, 'balanced': 60, 'freq': 140}
 # misc -----------------------------------------------------------------------
 vline_cfg = {'color': 'tab:red', 'linewidth': 2}
 
+# Backend ####################################################################
+IS_GPU = bool(os.environ.get('SSQ_GPU', None) == '1')
+IS_FULL_GPU = bool(os.environ.get('FULL_GPU', None) == '1')
+MOVE_TO_CPU = bool(IS_GPU and not IS_FULL_GPU)
+if IS_GPU:
+    import torch
+    from torch.fft import (fft2 as tfft2, ifft2 as tifft2, fft as tfft,
+                           ifft as tifft, ifftshift as tifftshift)
+
+if IS_FULL_GPU:
+    raise NotImplementedError
+
+def _handle_device(x):
+    if IS_GPU and isinstance(x, np.ndarray):
+        x = torch.as_tensor(x, device='cuda')
+    return x
+
+def _handle_fn(fn, *a, **k):
+    x = _handle_device(a[0])
+    return fn(x, *a[1:], **k)
+
+def fft2(*a, **k):
+    fn = tfft2 if IS_GPU else nfft2
+    return _handle_fn(fn, *a, **k)
+
+def ifft2(*a, **k):
+    fn = tifft2 if IS_GPU else nifft2
+    return _handle_fn(fn, *a, **k)
+
+def fft(*a, **k):
+    return nfft(*a, **k)
+
+def ifft(*a, **k):
+    return nifft(*a, **k)
+
+def ifftshift(*a, **k):
+    return nifftshift(*a, **k)
+
 # Data helpers ###############################################################
 def load_data(example_index):
     """Returns `x, fs, labels`."""
@@ -79,27 +118,31 @@ def sparse_mean(x, div=100, iters=4):
 
 def cc_2d1d(x, hf):
     M, N = x.shape
-    prod = fft2(x) * hf
+    prod = fft2(x) * _handle_device(hf)
 
     sub = M
     xfs = prod.reshape(sub, -1, N).mean(axis=0)
 
     out = ifft2(xfs).real
+    if MOVE_TO_CPU:
+        out = out.cpu()
     return out
 
 
-def pad_input_make_t(x, fs):
+def pad_input_make_t(x, fs, N_ref=None):
+    if N_ref is None:
+        N_ref = len(x)
     t = np.linspace(0, len(x)/fs, len(x))
     # right-pad by at least the length of `x`, but to power of 2,
     # then not at all internally
-    padded_len_min = 2*len(x)# if len(x) > 60000 else 4*len(x)  # TODO rm
+    padded_len_min = 2*N_ref
     padded_len = int(2**np.ceil(np.log2(padded_len_min)))
     pad_right = (padded_len - len(x))//2
     pad_left = padded_len - len(x) - pad_right
     xp = np.pad(x, [pad_left, pad_right])
-    t = np.pad(t, [pad_left, pad_right])
+    tp = np.pad(t, [pad_left, pad_right])
 
-    return xp, t, pad_left, pad_right
+    return xp, tp, pad_left, pad_right
 
 
 def make_unpad_shorthand(pad_left, pad_right):
@@ -112,16 +155,16 @@ def make_impulse_response(ssq_cfg, fmax_idx, escale, escaling):
     M = ssq_cfg['wavelet']._Psih.shape[-1]
     ir2d = np.zeros(M)
     ir2d[M//2] = 1
-    ir2d = abs(cwt(ir2d, **ssq_cfg)[0])[:fmax_idx]
+    ir2d = abs(cwt(ir2d, **ssq_cfg, astensor=False)[0])[:fmax_idx]
     ir2d /= ir2d.max(axis=-1)[:, None]
 
     if escaling[0]:
         ir2d *= escale**2
-    ir2df = np.conj(fft2(ifftshift(ir2d, axes=1)))
+    ir2df = np.conj(nfft2(ifftshift(ir2d, axes=1)))
     return ir2d, ir2df
 
 
-def handle_wavelet(wavelet, M, ssq_precfg, fmax_idx_frac,
+def handle_wavelet(wavelet, fs, M, ssq_precfg, fmax_idx_frac,
                    silence_interval_samples, escaling):
     # arg checks
     is_ssqueezepy_wavelet = lambda wavelet: bool(
@@ -141,9 +184,11 @@ def handle_wavelet(wavelet, M, ssq_precfg, fmax_idx_frac,
 
     # generate sampled wavelets array, and scales ----------------------------
     _, scales = cwt(np.arange(M), wavelet, **ssq_precfg)
+
     # handle `fmax_idx_frac`
     fmax_idx = int(round(fmax_idx_frac * len(scales)))
     # make `ssq_cfg`
+    ssq_precfg = ssq_precfg.copy()  # don't affect external copy
     del ssq_precfg['scales']
     ssq_cfg = dict(wavelet=wavelet, scales=scales, **ssq_precfg)
 
@@ -160,11 +205,14 @@ def handle_wavelet(wavelet, M, ssq_precfg, fmax_idx_frac,
     # generate energy-aggregating window -------------------------------------
     # approximate the effective temporal width of the wavelet with median
     # temporal width
-    psihs = wavelet._Psih#[:fmax_idx]  # TODO
+    psihs = wavelet._Psih
     # fetch median wavelet, take it to time
     pf = psihs[int(.42 * len(psihs))]  # .42 = long story
-    pt = abs(ifft(pf))
-    # compute its eff two-sided temporal width  # TODO
+    if MOVE_TO_CPU:
+        pt = abs(tifft(pf).cpu())
+    else:
+        pt = abs(nifft(pf))
+    # compute its eff two-sided temporal width
     pwidth = np.where(pt < pt.max()/4)[0][0] * 2
     # make the window
     wsummer = np.zeros(M)
@@ -217,7 +265,7 @@ def _pred_not_near_silence(xsilence, pred, silence_proximity_samples):
 
 def get_predictions(g, tp, xsilence, pwidth, min_audio_interval_samples,
                     silence_proximity_samples, final_pred_n_peaks, n_labels):
-    g = g.copy()  # TODO rm
+    g = g.copy()
     preds_all = []  # final predictions
     preds_all_nofail = []  # if both haven't failed
 
@@ -279,7 +327,7 @@ def find_audio_change_timestamps(
         min_audio_interval=.5,
         impulse_pass=True, escaling=(1, 1, 1), pwidth_scaling=1, fmax_idx_frac=1,
         carve_th_scaling=1/3, n_carvings=2, final_pred_n_peaks=1, n_labels=2,
-        viz_labels=None):
+        viz_labels=None, N_ref=None):
     """Returns `n_labels` predictions, sorted as "earliest = likeliest".
 
     Parameters
@@ -358,17 +406,15 @@ def find_audio_change_timestamps(
          int(h*fs) for h in
          (silence_interval, silence_proximity, min_audio_interval)]
 
-    escaling = (1, 1, 1)  # TODO
-
     # handle `x`
-    xp, tp, pad_left, pad_right = pad_input_make_t(x, fs)
+    xp, tp, pad_left, pad_right = pad_input_make_t(x, fs, N_ref)
     u = make_unpad_shorthand(pad_left, pad_right)
     M = len(xp)
 
     # handle `wavelet`
     ssq_precfg = dict(scales='log', padtype=None)
     if reusables is None:
-        reusables = handle_wavelet(wavelet, M, ssq_precfg, fmax_idx_frac,
+        reusables = handle_wavelet(wavelet, fs, M, ssq_precfg, fmax_idx_frac,
                                    silence_interval_samples, escaling)
     (wavelet, ssq_cfg, ir2df, pwidth, wsummerf, wsilencef, escale, fmax_idx
      ) = reusables
@@ -389,21 +435,22 @@ def find_audio_change_timestamps(
         win = 'hamm'
         #win = dpss(512, 512//128)
         n_fft = int(512 * (fs / 16000))  # match duration used during experiments
-        Tsx = ssq_stft(x, win, n_fft=n_fft)[0][::-1]
-        aTsx_slc = abs(Tsx)**2
+        Tsx = ssq_stft(x, win, n_fft=n_fft, flipud=True, astensor=False)[0]
+        aTsx_slc = abs(Tsx)
         if escaling[1]:
-            escale_lin = np.linspace(1, 0, len(Tsx))[:, None]**2
+            escale_lin = np.linspace(1, 0, len(Tsx))[:, None]
             aTsx_slc *= escale_lin
+        aTsx_slc = aTsx_slc**2
         aTsx_slc = aTsx_slc[:int(.75*len(Tsx))]
 
         stft_carve_th = sparse_mean(aTsx_slc) * stft_prefilter_scaling
         Tsx[:len(aTsx_slc)][aTsx_slc > stft_carve_th] = 0
         xfilt = Tsx.sum(axis=0).real
 
-        xp, tp, pad_left, pad_right = pad_input_make_t(xfilt, fs)
+        xp, tp, pad_left, pad_right = pad_input_make_t(xfilt, fs, N_ref)
 
     # transform --------------------------------------
-    Txp, *_ = ssq_cwt(xp, **ssq_cfg)
+    Txp, *_ = ssq_cwt(xp, **ssq_cfg, astensor=False)
     Tx_slc = abs(Txp[:fmax_idx])
 
     # do carving -------------------------------------
@@ -417,7 +464,7 @@ def find_audio_change_timestamps(
 
     # carve post-processing
     # applies `escaling` and `silence_interval`
-    if escaling[2]:  # TODO
+    if escaling[2]:
         Tx_slc *= escale
     if silence_interval_samples > 0:
         Tx_slc[:, xsilence] = 0
