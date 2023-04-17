@@ -61,25 +61,25 @@ idxs_all = idxs_train + idxs_test
 
 # get predictions
 for example_idx in idxs_all:
-    if PRINT_TIMES:
-        t0 = dtime()
     # load data
     x, fs, labels = load_data(example_idx)
 
     # make predictions
     viz_labels = ((example_idx, labels) if VIZ_PREDS else
                   None)
+    if PRINT_TIMES:
+        t0 = dtime()
     preds = find_audio_change_timestamps(
         x, **other_cfg, **cfg, viz_labels=viz_labels)[0]
+    if PRINT_TIMES:
+        print("%.3g" % (dtime() - t0) + " sec", flush=True)
+    else:
+        print(end=".", flush=True)
 
     # append
     d = (results_train if example_idx in idxs_train else
          results_test)
     d['preds'].append(preds)
-    if PRINT_TIMES:
-        print("%.3g" % (dtime() - t0) + " sec", flush=True)
-    else:
-        print(end=".", flush=True)
 
 #%%############################################################################
 # Calculate score
@@ -122,7 +122,7 @@ for example_idx in idxs_all:
         printed_line = True
 
     print()
-    preds = sorted([float("%.2g" % p) for p in preds])
+    preds = sorted([float("%.3g" % p) for p in preds])
     print(tuple(np.array(list(scores_packed)).astype(int)), '--', example_idx)
     print(tuple(preds))
     print(tuple(labels))
@@ -136,6 +136,7 @@ print("Accuracy (train, test): {:.3f}, {:.3f}".format(
 
 #%%
 # from ? import make_gif
+# from pathlib import Path
 # make_gif(data_dir, str(Path(data_dir, "preds.gif")),
 #          duration=1000, overwrite=True, delimiter="im", HD=True, verbose=True)
 
@@ -144,60 +145,60 @@ print("Accuracy (train, test): {:.3f}, {:.3f}".format(
 # -----------------
 """
 (1, 1) -- 0
-(1.6, 3.5)
+(1.56, 3.54)
 (1.55, 3.5)
 
 (1, 1) -- 1
-(1.2, 1.7)
+(1.22, 1.74)
 (1.21, 1.74)
 
 (1, 1) -- 2
-(0.96, 1.6)
+(0.958, 1.57)
 (0.94, 1.57)
 
 (1, 1) -- 3
-(1.4, 1.8)
+(1.42, 1.87)
 (1.42, 1.85)
 ================================================================================
 
 (1,) -- 4
-(0.76, 1.1)
+(0.783, 1.12)
 (0.76,)
 
 (1, 1) -- 5
-(0.81, 1.7)
+(0.818, 1.69)
 (0.79, 1.68)
 
 (1, 1) -- 6
-(2.9, 3.3)
+(2.89, 3.3)
 (2.87, 3.28)
 
 (0,) -- 7
-(0.5, 0.75)
+(0.488, 0.738)
 (0.75,)
 
 (1,) -- 8
-(0.62, 1.8)
+(0.623, 1.77)
 (0.63,)
 
 (1,) -- 9
-(0.21, 0.46)
+(0.211, 0.468)
 (0.46,)
 
 (1,) -- 10
-(4.7, 5.0)
+(4.69, 4.97)
 (4.97,)
 
 (1,) -- 11
-(0.54, 0.97)
+(0.543, 0.956)
 (0.94,)
 
 (1, 1) -- 12
-(2.4, 3.0)
+(2.35, 3.0)
 (2.37, 2.99)
 
 (1, 0) -- 13
-(2.1, 2.4)
+(2.06, 2.44)
 (2.03, 2.73)
 Accuracy (train, test): 1.000, 0.857
 """

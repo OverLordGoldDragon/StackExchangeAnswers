@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
 import os
 import numpy as np
-from numpy.fft import (fft2 as nfft2, ifft2 as nifft2, fft as nfft,
-                       ifft as nifft, ifftshift as nifftshift)
+from numpy.fft import fft as nfft, ifft as nifft, ifftshift as nifftshift
 import matplotlib.pyplot as plt
 
 from ssqueezepy import Wavelet, ssq_cwt, ssq_stft, cwt, plot
@@ -13,7 +12,7 @@ from scipy.io import wavfile
 __all__ = [
     'wav_cfgs',
     'sparse_mean',
-    'cc_2d1d',
+    'cc2d1d',
     'pad_input_make_t',
     'make_unpad_shorthand',
     'make_impulse_response',
@@ -55,8 +54,7 @@ IS_FULL_GPU = bool(os.environ.get('FULL_GPU', None) == '1')
 MOVE_TO_CPU = bool(IS_GPU and not IS_FULL_GPU)
 if IS_GPU:
     import torch
-    from torch.fft import (fft2 as tfft2, ifft2 as tifft2, fft as tfft,
-                           ifft as tifft, ifftshift as tifftshift)
+    from torch.fft import fft as tfft, ifft as tifft, ifftshift as tifftshift
 
 if IS_FULL_GPU:
     raise NotImplementedError
@@ -67,25 +65,24 @@ def _handle_device(x):
     return x
 
 def _handle_fn(fn, *a, **k):
-    x = _handle_device(a[0])
-    return fn(x, *a[1:], **k)
-
-def fft2(*a, **k):
-    fn = tfft2 if IS_GPU else nfft2
-    return _handle_fn(fn, *a, **k)
-
-def ifft2(*a, **k):
-    fn = tifft2 if IS_GPU else nifft2
-    return _handle_fn(fn, *a, **k)
+    try:
+        x = _handle_device(a[0])
+        if IS_GPU:
+            for nm in ('axis', 'axes'):
+                if nm in k:
+                    k['dim'] = k.pop(nm)
+        return fn(x, *a[1:], **k)
+    except:
+        1/0
 
 def fft(*a, **k):
-    return nfft(*a, **k)
+    return _handle_fn(tfft if IS_GPU else nfft, *a, **k)
 
 def ifft(*a, **k):
-    return nifft(*a, **k)
+    return _handle_fn(tifft if IS_GPU else nifft, *a, **k)
 
 def ifftshift(*a, **k):
-    return nifftshift(*a, **k)
+    return _handle_fn(tifftshift if IS_GPU else nifftshift, *a, **k)
 
 # Data helpers ###############################################################
 def load_data(example_index):
@@ -116,16 +113,12 @@ def sparse_mean(x, div=100, iters=4):
         m = x[x > m / div].mean()
     return m
 
-def cc_2d1d(x, hf):
-    M, N = x.shape
-    prod = fft2(x) * _handle_device(hf)
 
-    sub = M
-    xfs = prod.reshape(sub, -1, N).mean(axis=0)
-
-    out = ifft2(xfs).real
+def cc2d1d(x, hf):
+    """https://dsp.stackexchange.com/a/87563/50076"""
+    out = ifft((fft(x) * hf).sum(axis=0)).real
     if MOVE_TO_CPU:
-        out = out.cpu()
+        out = out.cpu().numpy()
     return out
 
 
@@ -152,15 +145,18 @@ def make_unpad_shorthand(pad_left, pad_right):
 
 
 def make_impulse_response(ssq_cfg, fmax_idx, escale, escaling):
-    M = ssq_cfg['wavelet']._Psih.shape[-1]
-    ir2d = np.zeros(M)
-    ir2d[M//2] = 1
-    ir2d = abs(cwt(ir2d, **ssq_cfg, astensor=False)[0])[:fmax_idx]
+    ir2d = ifftshift(ifft(ssq_cfg['wavelet']._Psih[:fmax_idx], axis=1), axes=1)
+    ir2d = abs(ir2d)
+    if IS_GPU:
+        ir2d = ir2d.cpu().numpy()
     ir2d /= ir2d.max(axis=-1)[:, None]
 
     if escaling[0]:
         ir2d *= escale**2
-    ir2df = np.conj(nfft2(ifftshift(ir2d, axes=1)))
+    ir2df = np.conj(nfft(nifftshift(ir2d, axes=1)))
+    if IS_GPU:
+        ir2d = torch.as_tensor(ir2d, device='cuda')
+        ir2df = torch.as_tensor(ir2df, device='cuda')
     return ir2d, ir2df
 
 
@@ -209,7 +205,7 @@ def handle_wavelet(wavelet, fs, M, ssq_precfg, fmax_idx_frac,
     # fetch median wavelet, take it to time
     pf = psihs[int(.42 * len(psihs))]  # .42 = long story
     if MOVE_TO_CPU:
-        pt = abs(tifft(pf).cpu())
+        pt = abs(tifft(pf).cpu().numpy())
     else:
         pt = abs(nifft(pf))
     # compute its eff two-sided temporal width
@@ -218,14 +214,14 @@ def handle_wavelet(wavelet, fs, M, ssq_precfg, fmax_idx_frac,
     wsummer = np.zeros(M)
     wsummer[:pwidth//2] = 1
     wsummer[-(pwidth//2 - 1):] = 1
-    wsummerf = fft(wsummer)
+    wsummerf = nfft(wsummer)
 
     # generate silence-detecting window --------------------------------------
     if silence_interval_samples > 0:
         wsilence = np.zeros(M)
         wsilence[:silence_interval_samples//2 + 1] = 1
         wsilence[-(silence_interval_samples//2 - 1):] = 1
-        wsilencef = fft(wsilence)
+        wsilencef = nfft(wsilence)
     else:
         wsilencef = None
 
@@ -422,7 +418,7 @@ def find_audio_change_timestamps(
     # make silence vector, if specified --------------
     if silence_interval_samples > 0:
         ex = np.abs(xp)**2
-        exw = ifft(wsilencef * fft(ex)).real
+        exw = nifft(wsilencef * nfft(ex)).real
         # set regions within influence of padding to maximum
         exw[:pad_left + silence_interval_samples//2] = exw.max()
         exw[-(pad_right + silence_interval_samples//2):] = exw.max()
@@ -472,13 +468,13 @@ def find_audio_change_timestamps(
     # compute 1D feature vector ----------------------
     # applies `impulse_pass`
     if impulse_pass:
-        g = cc_2d1d(Tx_slc, ir2df)[0]
+        g = cc2d1d(Tx_slc, ir2df)
         g = g**2
     else:
         g = g**2
         g = g.sum(axis=0)
     # the "subtle impulse intensity" vector
-    g = ifft(wsummerf * fft(g)).real
+    g = nifft(wsummerf * nfft(g)).real
 
     if viz_labels is not None:
         example_index, labels = viz_labels

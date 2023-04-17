@@ -15,7 +15,7 @@ from ssqueezepy.visuals import plot, plotscat, imshow
 from ssqueezepy.experimental import scale_to_freq
 
 from utils87355 import (
-    wav_cfgs, sparse_mean, cc_2d1d,
+    wav_cfgs, sparse_mean, cc2d1d,
     pad_input_make_t, make_unpad_shorthand,
     make_impulse_response, handle_wavelet,
     derivative_along_freq,
@@ -29,7 +29,7 @@ from utils87355 import (
 xo, fs, labels = load_data(EXAMPLE_INDEX)
 x, t, pad_left, pad_right = pad_input_make_t(xo, fs)
 
-N = len(x)
+M = len(x)
 
 u = make_unpad_shorthand(pad_left, pad_right)
 
@@ -42,7 +42,7 @@ wavelet = Wavelet('gmw')
 Wx, scales = cwt(x, wavelet, padtype=None)
 Sx = stft(x)[::-1]
 
-freq_Wx = scale_to_freq(scales, wavelet, N, fs=fs)
+freq_Wx = scale_to_freq(scales, wavelet, M, fs=fs)
 freq_Sx = np.linspace(0, fs/2, len(Sx))[::-1]
 
 #%% Visualize
@@ -66,11 +66,7 @@ reusables_ckw = dict(
     # this should be set to `(0, 1, 1)`
     escaling=(1, 1, 1),
 )
-reusables = handle_wavelet(
-    len(pad_input_make_t(x, fs=fs)[0]),
-    fmax_idx_frac=200/471,
-    **reusables_ckw,
-)
+reusables = handle_wavelet(M=M, fmax_idx_frac=200/471, **reusables_ckw)
 (wavelet, ssq_cfg, ir2df, pwidth, wsummerf, wsilencef, escale, fmax_idx
  ) = reusables
 
@@ -203,7 +199,7 @@ if OPTION == 0:
 else:
     if OPTION == 2:
         g *= escale
-    g = cc_2d1d(g, ir2df)[0]
+    g = cc2d1d(g, ir2df)
     g = g**2
 g = ifft(wsummerf * fft(g)).real
 
