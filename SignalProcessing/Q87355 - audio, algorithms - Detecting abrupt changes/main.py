@@ -257,7 +257,8 @@ Tx_carved = Tx_slc
 
 #%%
 centers = (0.7, 1.42)
-escale_ = np.logspace(np.log10(1), np.log10(np.sqrt(.1)), len(Tx))[:, None]**2
+escale_ = np.logspace(np.log10(1), np.log10(np.sqrt(.1)), len(Tx_slco)
+                      )[:, None]**2
 ikw = dict(centers=centers, intervals=intervals[1], t=tp)
 run_viz(Tx_slco*escale_, **ikw, subtitle="|SSQ_CWT|", cmap_scaling=.2,
         yticks=freqs_cwt[:fmax_idx])
