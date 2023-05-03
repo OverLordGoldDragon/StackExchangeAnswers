@@ -18,8 +18,9 @@ def plotscat(*a, **k):
         x = abs(x)
     mn, mx = x.min(), x.max()
     amx = 1.03*max(abs(mn), abs(mx))
-    ylims = (-amx, amx) if mn < -.03 else (0, amx)
-    _plotscat(x, *a[1:], **k, ylims=ylims)
+    if 'ylims' not in k:
+        k['ylims'] = (-amx, amx) if mn < -.03 else (0, amx)
+    _plotscat(x, *a[1:], **k)
 
 
 def energy(x):
@@ -70,9 +71,12 @@ xf0[hbw*2] = 1
 xf0[-(hbw*2)] = 1
 
 #%% Plot
-def viz(xf, name, aval=0, do_measure=0, worst=0, cval=0):
+def viz(xf, name, aval=0, do_measure=0, worst=0, cval=0, ylims01=True,
+        show_ref=False):
     fig, axes = plt.subplots(1, 2, layout='constrained', figsize=(12, 5))
     pkw = dict(fig=fig, abs=aval, complex=cval)
+    if ylims01:
+        pkw['ylims'] = (0, 1.03)
     if worst:
         sub = get_xf_sub_worst(xf, M)
     else:
@@ -87,6 +91,8 @@ def viz(xf, name, aval=0, do_measure=0, worst=0, cval=0):
         title2 = "{}fft({}[::{}]){} -- {}".format(l, name, M, r, info)
 
     plotscat(xf,  **pkw, ax=axes[0], title=title1)
+    if show_ref:
+        pkw['hlines'] = (1/M, {'color': 'tab:red', 'linewidth': 1})
     plotscat(sub, **pkw, ax=axes[1], title=title2)
     plt.show()
 
@@ -129,8 +135,9 @@ h_scipy = scipy_decimate_filter(N, M)
 hf_scipy = fft(h_scipy)
 
 #%% Show results
-viz(hf, "h", aval=1, do_measure=1, worst=1)
-viz(hf_scipy, "h_scipy", aval=1, do_measure=1, worst=1)
+ckw = dict(aval=1, do_measure=1, worst=1, show_ref=1, ylims01=0)
+viz(hf, "h", **ckw)
+viz(hf_scipy, "h_scipy", **ckw)
 
 #%% Effect
 def dft_upsample(xf, M):
@@ -141,17 +148,32 @@ def dft_upsample(xf, M):
     return np.hstack([xf[:L//2],
                       nyq/2, zeros, np.conj(nyq)/2,
                       xf[-(L//2 - 1):]]) * M
-np.random.seed(42)
-x = np.random.randn(N)
-x0_nosub = ifft(fft(x) * hf)
-x1_nosub = ifft(fft(x) * hf_scipy)
-_x0f = fft(x0_nosub).reshape(M, -1).mean(axis=0)
-_x1f = fft(x1_nosub).reshape(M, -1).mean(axis=0)
 
-x0f = dft_upsample(_x0f, M)
-x1f = dft_upsample(_x1f, M)
-x0, x1 = ifft(x0f), ifft(x1f)
+def rel_l2(x0, x1):
+    return np.linalg.norm(x0 - x1) / np.linalg.norm(x0)
 
+def generate_case(M, seed=0):
+    np.random.seed(seed)
+    x = np.random.randn(N)
+    xf = fft(x)
+    x0_convf = xf * hf
+    x1_convf = xf * hf_scipy
+
+    _x0f = x0_convf.reshape(M, -1).mean(axis=0)
+    _x1f = x1_convf.reshape(M, -1).mean(axis=0)
+    x0f = dft_upsample(_x0f, M)
+    x1f = dft_upsample(_x1f, M)
+    x0, x1 = ifft(x0f), ifft(x1f)
+
+    x0_nosub = x0_convf
+    x0_nosub[hbw:-hbw] = 0
+    x0_nosub = ifft(x0_nosub)
+    x1_nosub = ifft(x1_convf)
+
+    return x0, x1, x0_nosub, x1_nosub
+
+#%% Viz
+x0, x1, x0_nosub, x1_nosub = generate_case(M, seed=42)
 
 fig, axes = plt.subplots(1, 2, layout='constrained', figsize=(12, 5),
                          sharey=True)
@@ -160,3 +182,22 @@ plot(x0_nosub.real, ax=axes[0])
 plot(x0.real, ax=axes[0], title="hf: recovered")
 plot(x1_nosub.real, ax=axes[1])
 plot(x1.real, ax=axes[1], title="hf_scipy: recovered")
+print(rel_l2(x0, x0_nosub), rel_l2(x1, x1_nosub), sep='\n')
+
+#%% Survey
+dist_hf, dist_hf_scipy = [], []
+for seed in range(1000000):
+    x0, x1, x0_nosub, x1_nosub = generate_case(M, seed)
+    dist_hf.append(rel_l2(x0, x0_nosub))
+    dist_hf_scipy.append(rel_l2(x1, x1_nosub))
+dist_hf, dist_hf_scipy = [np.array(d) for d in (dist_hf, dist_hf_scipy)]
+
+#%% Viz survey
+plot(dist_hf)
+plot(dist_hf_scipy)
+
+fmt = ("(min, max, mean)   = ({:.3g}, {:.3g}, {:.3g})\n"
+       "(min_idx, max_idx) = ({}, {})\n")
+ops = (np.min, np.max, np.mean, np.argmin, np.argmax)
+print(fmt.format(*[op(dist_hf) for op in ops]))
+print(fmt.format(*[op(dist_hf_scipy) for op in ops]))
