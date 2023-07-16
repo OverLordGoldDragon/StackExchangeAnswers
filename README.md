@@ -36,8 +36,8 @@ Code-accompanied answers say "code Q...", found in respective folders, or "code 
 
   1. ✯ Identifying abrupt changes in audio - [Q&A](https://dsp.stackexchange.com/a/87512/50076), code Q87355
   2. 🡡 Locating non-homogeneous areas in an image - [Q&A](https://dsp.stackexchange.com/a/75636/50076), code included
-  3. Nonlinear filtering and inspection of noisy vibration signal - [Q&A](https://dsp.stackexchange.com/a/84095/50076), code included
-  4. Estimate sine frequency under white noise - [Q&A](https://dsp.stackexchange.com/a/88711/50076), code Q76644
+  3. 🡡 Estimate sine frequency under white noise - [Q&A](https://dsp.stackexchange.com/a/88711/50076), code Q76644
+  4. Nonlinear filtering and inspection of noisy vibration signal - [Q&A](https://dsp.stackexchange.com/a/84095/50076), code included
 
 #### Intuition / "Deep" Explanations
 

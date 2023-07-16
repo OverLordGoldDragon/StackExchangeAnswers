@@ -4,7 +4,21 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.lines as mlines
-from estimators import est_freq
+from estimators import est_freq, est_freq_multi
+
+# USER CONFIGS
+# plot options
+HEIGHT_SCALING = 1
+WIDTH_SCALING = 1
+
+# OTHER ----------------------------------------------------------------------
+# execute some configs
+w, h = 10*WIDTH_SCALING, 10*HEIGHT_SCALING
+plt.rcParams['figure.figsize'] = [w, h]
+
+# reusables
+snrs_db_practical = np.linspace(-10, 50,  100)
+snrs_db_wide      = np.linspace(100, 300, 50)
 
 # Testing ####################################################################
 def make_x(N, f, snr, _base_arg=None, get_xo=False):
@@ -18,7 +32,30 @@ def make_x(N, f, snr, _base_arg=None, get_xo=False):
     return x if not get_xo else (x, xo)
 
 
-def run_test(f, N, n_trials, name0, name1, snrs, seed):
+def run_test(f_N_all, N, n_trials, name0, name1, seed=0,
+             sweep_mode='practical', snrs=None, verbose=True):
+    # execute some configs
+    if snrs is None:
+        if sweep_mode == 'practical':
+            snrs = snrs_db_practical
+        else:
+            snrs = snrs_db_wide
+
+    # run test
+    errs0_all, errs1_all = {}, {}
+    for f_N in f_N_all:
+        f = f_N * N
+        errs0, errs1 = _run_test(f, N, n_trials, name0, name1, snrs, seed)
+        errs0_all[f_N] = errs0
+        errs1_all[f_N] = errs1
+
+        if verbose:
+            print_progress(f_N, N, n_trials, name0, name1, f_N_all)
+
+    crlbs = compute_crlbs(N, snrs, T=1)
+    return errs0_all, errs1_all, snrs, crlbs
+
+def _run_test(f, N, n_trials, name0, name1, snrs, seed):
     np.random.seed(seed)
     _base_arg = 2*np.pi*f*np.arange(N)/N
 
@@ -29,8 +66,7 @@ def run_test(f, N, n_trials, name0, name1, snrs, seed):
         for _ in range(n_trials):
             x = make_x(N, f, snr, _base_arg)
 
-            f_est0 = est_freq(x, name0)
-            f_est1 = est_freq(x, name1)
+            f_est0, f_est1 = est_freq(x, names=(name0, name1))
             err0 = (f_est0 - f/N)**2
             err1 = (f_est1 - f/N)**2
             errs0[snr].append(err0)
@@ -42,6 +78,45 @@ def run_test(f, N, n_trials, name0, name1, snrs, seed):
     return errs0, errs1
 
 
+def run_test_multitone(f_N_all, A_all, N, n_trials, name0, name1, snrs, seed=0,
+                       verbose=True):
+    np.random.seed(seed)
+    n_tones = len(f_N_all)
+    _base_arg = 2*np.pi*np.arange(N)/N
+
+    errs0_all, errs1_all = [{f_N: {snr: [] for snr in snrs} for f_N in f_N_all}
+                            for _ in range(2)]
+    for snr in snrs:
+        noise_var = 0.5 / 10**(snr/10)  # unit-amplitude case
+        noise_std = np.sqrt(noise_var)
+
+        for _ in range(n_trials):
+            x = np.random.randn(N) * noise_std
+            for f_N, A in zip(f_N_all, A_all):
+                phi = np.random.uniform(0, 1) * (2*np.pi)
+                x += A * np.cos(_base_arg*(f_N * N) + phi)
+
+            f_ests0, f_ests1 = est_freq_multi(x, names=(name0, name1),
+                                              n_tones=n_tones)
+            for f_N in f_N_all:
+                errs0_all[f_N][snr].append(np.min((f_ests0 - f_N)**2))
+                errs1_all[f_N][snr].append(np.min((f_ests1 - f_N)**2))
+
+        for f_N in f_N_all:
+            errs0_all[f_N][snr] = (
+                np.mean(errs0_all[f_N][snr]), np.std(errs0_all[f_N][snr]))
+            errs1_all[f_N][snr] = (
+                np.mean(errs1_all[f_N][snr]), np.std(errs1_all[f_N][snr]))
+        if verbose:
+            print(end='.')
+
+    crlbs = compute_crlbs(N, snrs, T=1)
+    # compute SNRs for later
+    snrs_f_N = {f_N: snr_db_amplitude_adjust(snrs, A)
+                for f_N, A in zip(f_N_all, A_all)}
+    return errs0_all, errs1_all, snrs_f_N, crlbs
+
+
 def print_progress(f_N, N, n_trials, name0, name1, f_N_all):
     longest = max(len(str(f_N)) for f_N in f_N_all)
     fmt = "f={:<" + str(longest) + ".6g}"
@@ -50,8 +125,28 @@ def print_progress(f_N, N, n_trials, name0, name1, f_N_all):
     print(txt, flush=True)
 
 # Visualization ##############################################################
-def run_viz(a, b0mn, b1mn, b0sd, b1sd, f_N, N, n_trials, snrs, crlbs,
-            ymin=None, legend2=False, figax=None, ylabel=True):
+def run_viz(errs0_all, errs1_all, snrs, crlbs,
+            f_N_all, N, n_trials, names=("Cedron", "Kay_2")):
+    viz_names = names
+    plot_data = {}
+    for f_N in f_N_all:
+        plot_data[f_N] = get_viz_data(errs0_all[f_N], errs1_all[f_N])
+    ymin = int(np.floor(np.min(np.array(list(plot_data.values()))[:, 1:])))
+
+    fig, axes = plt.subplots(2, 2, figsize=(w*1.6, h*1.6), layout='constrained')
+
+    for i, f_N in enumerate(f_N_all):
+        legend2 = bool(i == 0)
+        ylabel = bool(i % 2 == 0)
+        _run_viz(*plot_data[f_N], f_N, N, n_trials, snrs, crlbs, ymin=ymin,
+                 figax=(fig, axes.flat[i]), legend2=legend2, ylabel=ylabel,
+                 viz_names=viz_names)
+    plt.show()
+
+
+def _run_viz(a, b0mn, b1mn, b0sd, b1sd, f_N, N, n_trials, snrs, crlbs,
+             ymin=None, legend2=False, figax=None, ylabel=True,
+             viz_names=("Cedron", "Kay_2")):
     # plot
     if figax is None:
         fig, ax = plt.subplots(layout='constrained')
@@ -66,39 +161,148 @@ def run_viz(a, b0mn, b1mn, b0sd, b1sd, f_N, N, n_trials, snrs, crlbs,
     ax.plot(a, b1sd, color='tab:green',  linewidth=2, linestyle='--')
 
     # configure axes, set title
+    title = "f/N = {:.6g}, N={}, n_trials={}".format(f_N, N, n_trials)
+    _basic_style(ax, ymin, snrs, title, N, n_trials, ylabel=ylabel)
+
+    # legends
+    legend = list(viz_names)
+    if crlbs is not None:
+        legend = ["CRLB"] + legend
+    _legend2(ax, legend)
+
+
+def run_viz2(errs0_all, errs1_all, snrs, crlbs,
+             f_N_all, N, n_trials, names=("Cedron", "Kay_2")):
+    viz_names = names
+    plot_data = get_viz_data2(errs0_all, errs1_all)
+    n_freqs = len(f_N_all)
+
+    ymin = int(np.floor(min(np.min(crlbs), np.min(np.array(plot_data[1:])))))
+    fig, ax = plt.subplots(figsize=(w*1, h*1), layout='constrained')
+    _run_viz2(*plot_data, N, n_freqs, n_trials, snrs, crlbs, ymin=ymin,
+              figax=(fig, ax), viz_names=viz_names)
+    plt.show()
+
+
+def _run_viz2(a, b0mn, b1mn, b0sd, b1sd, N, n_freqs, n_trials, snrs, crlbs,
+              ymin=None, figax=None, viz_names=("Cedron", "DFT_quadratic")):
+    # plot
+    if figax is None:
+        fig, ax = plt.subplots(layout='constrained')
+    else:
+        fig, ax = figax
+
+    if crlbs is not None:
+        ax.plot(a, np.log10(crlbs), linewidth=3)
+    ax.plot(a, b0mn, color='tab:orange', linewidth=3)
+    ax.plot(a, b1mn, color='tab:cyan',   linewidth=3)
+    ax.plot(a, b0sd, color='tab:orange', linewidth=2, linestyle='--')
+    ax.plot(a, b1sd, color='tab:cyan',   linewidth=2, linestyle='--')
+
+    # configure axes, set title
+    title = ("N={}, Dq_Npad=2048, f/N=lin sweep\n"
+             "n_freqs={}, n_trials_per_freq={}").format(N, n_freqs, n_trials)
+    _basic_style(ax, ymin, snrs, title, N, n_trials, ylabel=True)
+
+    # legends
+    legend = ["CRLB", *viz_names]
+    _legend2(ax, legend)
+
+
+def _legend2(ax, legend):
+    first_legend = ax.legend(legend, fontsize=22, loc=1)
+    lg0 = mlines.Line2D([], [], color='k', linewidth=3, label='mean')
+    lg1 = mlines.Line2D([], [], color='k', linewidth=3, label='std',
+                        linestyle='--')
+    ax.add_artist(first_legend)
+    ax.legend(handles=[lg0, lg1], loc='lower left', fontsize=22)
+
+
+def _basic_style(ax, ymin, snrs, title, N, n_trials, ylabel=True):
     ax.set_ylim(ymin, 0)
-    ax.set_xlim(snrs.min(), snrs.max())
+    ax.set_xlim(np.min(snrs), np.max(snrs))
     ax.set_xlabel("SNR [dB]", size=20)
     if ylabel:
         ax.set_ylabel("MSE (log10)", size=20)
-    ax.set_title("f/N = {:.6g}, N={}, n_trials={}".format(f_N, N, n_trials),
-                 weight='bold', fontsize=24)
-
-    # legends
-    legend = ["Cedron", "Kay 2"]
-    if crlbs is not None:
-        legend = ["CRLB"] + legend
-    first_legend = ax.legend(legend, fontsize=22, loc=1)
-    if legend2:
-        lg0 = mlines.Line2D([], [], color='k', linewidth=3, label='mean')
-        lg1 = mlines.Line2D([], [], color='k', linewidth=3, label='std',
-                            linestyle='--')
-        ax.add_artist(first_legend)
-        ax.legend(handles=[lg0, lg1], loc='lower left', fontsize=22)
+    ax.set_title(title, weight='bold', fontsize=24)
 
 
-def get_viz_data(errs0, errs1):
+def get_viz_data(*errs_all):
+    a = np.array(list(errs_all[0]))
+
     # retrieve means & SDs, make log
-    a = np.array(list(errs0))
-    b0 = np.log10(np.array(list(errs0.values())))
-    b1 = np.log10(np.array(list(errs1.values())))
-    b0mn, b1mn = b0[:, 0], b1[:, 0]
-    b0sd, b1sd = b0[:, 1], b1[:, 1]
-    return a, b0mn, b1mn, b0sd, b1sd
+    bmns, bsds = [], []
+    for errs in errs_all:
+        b = np.log10(np.array(list(errs.values())))
+        bmn, bsd = b[:, 0], b[:, 1]
+        bmns.append(bmn)
+        bsds.append(bsd)
+    return a, *bmns, *bsds
 
 
-def run_viz_multitone(a, b0mn, b1mn, b0sd, b1sd, c, f_N, A, snrs_bounds,
-                      ymin=None, legend2=False, figax=None, ylabel=True):
+def get_viz_data2(*errs_all):
+    f_N_all = list(errs_all[0])
+    snrs = list(errs_all[0][f_N_all[0]])
+    a = snrs
+
+    # restructure
+    # element of `errs_all` is structured
+    #     {f_N: {snr: (float, float)}}
+    # convert to
+    #     {snr: [(float, float)]}
+    errs_all_re = []
+    for errs in errs_all:
+        errs_re = {f_N: np.array(list(errs[f_N].values())) for f_N in f_N_all}
+        errs_all_re.append(errs_re)
+
+    # retrieve means & SDs, make log
+    bmns_all, bsds_all = [], []
+    for errs_re in errs_all_re:
+        b = np.array(list(errs_re.values()))
+        bmns, bsds = b[..., 0], b[..., 1]
+        # average along frequency
+        bmn, bsd = [np.log10(np.mean(g, axis=0)) for g in (bmns, bsds)]
+        bmns_all.append(bmn)
+        bsds_all.append(bsd)
+
+    bmns_all, bsds_all = [np.array(g) for g in (bmns_all, bsds_all)]
+    return a, *bmns_all, *bsds_all
+
+
+def run_viz_multitone(errs0_all, errs1_all, snrs_f_N, crlbs,
+                      f_N_all, A_all, N, n_trials, snrs_bounds,
+                      names=("Cedron", "DFT_argmax")):
+    viz_names = names
+    plot_data = {}
+    for f_N in f_N_all:
+        crlbs = compute_crlbs(N, snrs_f_N[f_N], T=1)
+        plot_data[f_N] = get_viz_data_multitone(errs0_all[f_N], errs1_all[f_N],
+                                                snrs_f_N[f_N], crlbs, snrs_bounds)
+
+    # exclude `a` and zero stdev (log -inf)
+    vals = np.array([np.array(list(plot_data.values()))[:, i] for i in
+                     (1, 3, 5)])
+    # take log of crlbs
+    vals[-1] = np.log10(vals[-1])
+    vals[np.isinf(vals)] = 0
+    ymin = int(np.floor(np.min(vals)))
+
+    fig, axes = plt.subplots(2, 2, figsize=(w*1.6, h*1.6), layout='constrained')
+
+    for i, (f_N, A) in enumerate(zip(f_N_all, A_all)):
+        legend2 = bool(i == 0)
+        ylabel = bool(i % 2 == 0)
+        _run_viz_multitone(*plot_data[f_N], f_N, A, snrs_bounds, ymin=ymin,
+                           figax=(fig, axes.flat[i]), legend2=legend2,
+                           ylabel=ylabel, viz_names=viz_names)
+    fig.suptitle("Multi-tone Estimation: N={}, n_trials={}".format(N, n_trials),
+                 weight='bold', fontsize=28)
+    plt.show()
+
+
+def _run_viz_multitone(a, b0mn, b1mn, b0sd, b1sd, c, f_N, A, snrs_bounds,
+                       ymin=None, legend2=False, figax=None, ylabel=True,
+                       viz_names=("Cedron", "DFT_argmax")):
     # plot
     fig, ax = figax
 
@@ -117,7 +321,7 @@ def run_viz_multitone(a, b0mn, b1mn, b0sd, b1sd, c, f_N, A, snrs_bounds,
                  weight='bold', fontsize=24)
 
     # legends
-    legend = ["CRLB-single", "Cedron", "DFT_argmax"]
+    legend = ["CRLB-single", *viz_names]
     first_legend = ax.legend(legend, fontsize=22, loc=1)
     if legend2:
         lg0 = mlines.Line2D([], [], color='k', linewidth=3, label='mean')

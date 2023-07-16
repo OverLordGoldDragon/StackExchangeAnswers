@@ -9,51 +9,74 @@ from numpy.fft import rfft
 from scipy.signal import hilbert
 
 
-def est_freq(x, name):
-    fn = estimator_fns[name]
+def est_freq(x, names):
+    if not isinstance(names, (list, tuple)):
+        names = [names]
+
     N = len(x)
+    X = rfft(x)
 
-    if 'cedron' in name:
-        X = rfft(x)
-        # `1:-1` avoids bin duplication: happens with peak at DC/Nyquist
-        # (Hermitian symmetry); it does degrade performance. Non-applicable to
-        # complex or two-bin case. Actual DC/Nyquist peaks can be handled,
-        # not done here (note, they have double the value of any other bin
-        # for same sine amplitude)
-        # (heuristic by John Muradeli)
-        kmax = np.argmax(abs(X[1:-1])) + 1
+    f_ests = [[] for _ in range(len(names))]
+    for i, name in enumerate(names):
+        fn = estimator_fns[name]
+        if 'cedron' in name:
+            kmax = np.argmax(abs(X[1:-1])) + 1
+            # `1:-1` avoids bin duplication: happens with peak at DC/Nyquist
+            # (Hermitian symmetry); it does degrade performance. Non-applicable to
+            # complex or two-bin case. Actual DC/Nyquist peaks can be handled,
+            # not done here (note, they have double the value of any other bin
+            # for same sine amplitude)
+            # (heuristic by John Muradeli)
+            Z = X[kmax-1:kmax+2]
+            f_est = fn(Z, kmax, N)
+        elif 'kay' in name:
+            x_analytic = hilbert(x)
+            f_est = fn(x_analytic, N)
+        elif name == 'dft_quadratic':
+            Npad = 2048
+            Xpa = abs(rfft(x, n=Npad))
+            kmax = np.argmax(Xpa[1:-1]) + 1
+            Z = Xpa[kmax-1:kmax+2]
+            f_est = fn(Z, kmax, Npad)# * (N / Npad)
+        else:
+            f_est = fn(x)
+        f_ests[i].append(f_est)
 
-        Z = X[kmax-1:kmax+2]
-        f = fn(Z, kmax, N)
-    elif 'kay' in name:
-        x_analytic = hilbert(x)
-        f = fn(x_analytic, N)
-    else:
-        f = fn(x)
-    return f
+    f_ests = _postprocess_f_ests(f_ests)
+    return f_ests
 
 
-def est_freq_multi(x, n_tones=4):
+def est_freq_multi(x, names=None, n_tones=4):
+    if not isinstance(names, (list, tuple)):
+        names = [names]
+    for name in names:
+        assert name in ('cedron_3bin', 'dft_quadratic', 'dft_argmax'), name
+
     N = len(x)
     X = rfft(x)
     Xa = abs(X)
-    f_ests0, f_ests1 = [], []
+    f_ests = [[] for _ in range(len(names))]
 
     for _ in range(n_tones):
         kmax = np.argmax(Xa[1:-1]) + 1
-        Z = X[kmax-1:kmax+2]
-        f_est0 = est_f_cedron_3bin(Z, kmax, N)
+        for i, name in enumerate(names):
+            fn = estimator_fns[name]
+            if name == 'cedron_3bin':
+                Z = X[kmax-1:kmax+2]
+                f_est = fn(Z, kmax, N)
+            elif name == 'dft_quadratic':
+                Z = Xa[kmax-1:kmax+2]
+                f_est = fn(Z, kmax, N)
+            elif name == 'dft_argmax':
+                f_est = kmax/N
+            f_ests[i].append(f_est)
+
         # for low A, the remaining peak points of higher A can dominate;
         # clear a bit more
         Xa[kmax-3:kmax+4] = 0
 
-        # DFT peak
-        f_est1 = kmax/N
-
-        f_ests0.append(f_est0)
-        f_ests1.append(f_est1)
-
-    return np.array(f_ests0), np.array(f_ests1)
+    f_ests = _postprocess_f_ests(f_ests)
+    return f_ests
 
 
 def est_f_cedron(Z, k, N):
@@ -193,6 +216,20 @@ def est_f_dft_argmax(x):
     return np.argmax(abs(rfft(x)))
 
 
+def est_f_dft_quadratic(Z, kmax, N):
+    p1, p2, p3 = abs(Z)
+    f = (kmax + ((p1 - p3) / (2*(p1 + p3)))) / N
+    return f
+
+
+def _postprocess_f_ests(f_ests):
+    for i in range(len(f_ests)):
+        f_ests[i] = np.array(f_ests[i])
+    if len(f_ests) == 1:
+        f_ests = float(f_ests[0])
+    return f_ests
+
+
 estimator_fns = {
     'cedron': est_f_cedron,
     'cedron_complex': est_f_cedron_complex,
@@ -202,4 +239,5 @@ estimator_fns = {
     'kay_1': est_f_kay_1,
     'kay_2': est_f_kay_2,
     'dft_argmax': est_f_dft_argmax,
+    'dft_quadratic': est_f_dft_quadratic,
 }
