@@ -5,41 +5,62 @@ Functions aren't performance-optimized, and have redundant arguments.
 """
 # https://dsp.stackexchange.com/q/76644/50076
 import numpy as np
-from numpy.fft import rfft
+from numpy.fft import rfft, fft
 from scipy.signal import hilbert
 
 
-def est_freq(x, names):
+def est_freq(x, names, real=True):
     if not isinstance(names, (list, tuple)):
         names = [names]
 
     N = len(x)
-    X = rfft(x)
+    if real:
+        X = rfft(x)
+    else:
+        X = fft(x)
 
     f_ests = [[] for _ in range(len(names))]
     for i, name in enumerate(names):
         fn = estimator_fns[name]
         if 'cedron' in name:
-            kmax = np.argmax(abs(X[1:-1])) + 1
             # `1:-1` avoids bin duplication: happens with peak at DC/Nyquist
             # (Hermitian symmetry); it does degrade performance. Non-applicable to
             # complex or two-bin case. Actual DC/Nyquist peaks can be handled,
             # not done here (note, they have double the value of any other bin
             # for same sine amplitude)
             # (heuristic by John Muradeli)
-            Z = X[kmax-1:kmax+2]
+            if real:
+                kmax = np.argmax(abs(X[1:-1])) + 1
+                Z = X[kmax-1:kmax+2]
+            else:
+                kmax = np.argmax(abs(X))
+                if kmax == 0:
+                    Z = np.array([X[-1], X[0], X[1]])
+                elif kmax == N - 1:
+                    Z = np.array([X[-2], X[-1], X[0]])
+                else:
+                    Z = X[kmax-1:kmax+2]
             f_est = fn(Z, kmax, N)
+
         elif 'kay' in name:
-            x_analytic = hilbert(x)
+            if real:
+                x_analytic = hilbert(x)
+            else:
+                x_analytic = x
             f_est = fn(x_analytic, N)
+
         elif name == 'dft_quadratic':
+            if not real:
+                raise NotImplementedError
             Npad = 2048
             Xpa = abs(rfft(x, n=Npad))
             kmax = np.argmax(Xpa[1:-1]) + 1
             Z = Xpa[kmax-1:kmax+2]
             f_est = fn(Z, kmax, Npad)# * (N / Npad)
+
         else:
             f_est = fn(x)
+
         f_ests[i].append(f_est)
 
     f_ests = _postprocess_f_ests(f_ests)
@@ -95,14 +116,18 @@ def est_f_cedron(Z, k, N):
 
 def est_f_cedron_complex(Z, k, N):
     """
-    "Exact Frequency Formula for a Pure Real Tone in a DFT", Cedron Dawg
-    https://www.dsprelated.com/showarticle/773.php
+    "Three Bin Exact Frequency Formulas for a Pure Complex Tone in a DFT",
+    Cedron Dawg,
+    https://www.dsprelated.com/showarticle/1043.php
     """
     R1 = np.exp(-1j*2*np.pi/N)
     num = -R1 * Z[0] + (1 + R1) * Z[1] - Z[2]
     den = -Z[0] + (1+R1)*Z[1] - R1*Z[2]
     alpha = np.real(np.log(num / den) / 1j)
-    f = (alpha / (2 * np.pi)) + k / N
+
+    if k > N//2:
+        k = -(N - k)
+    f = k/N + alpha / (2 * np.pi)
     return f
 
 
@@ -125,6 +150,26 @@ def _cedron_bin_finish(A, B, C):
     den = K @ A
     ratio = max(min(num/den, 1), -1)  # handles float issues
     f = np.arccos(ratio) / (2*np.pi)
+    return f
+
+
+def est_f_cedron_3bin_complex(Z, k, N):
+    """
+    "Three Bin Exact Frequency Formulas for a Pure Complex Tone in a DFT",
+    Cedron Dawg, Eq 19 (via Eqs 35, 31, 20, 16)
+    https://www.dsprelated.com/showarticle/1043.php
+    """
+    R1 = np.exp(-1j*1*2*np.pi/N)
+    DZ = Z * np.array([1/R1, 1, R1])
+    G = np.conj(Z + DZ)
+    K = G - np.mean(G)
+
+    num = K @ Z
+    den = K @ DZ
+    ratio = num / den
+    if k > N//2:
+        k = -(N - k)
+    f = k/N + np.arctan2(ratio.imag, ratio.real) / (2*np.pi)
     return f
 
 
@@ -235,6 +280,7 @@ estimator_fns = {
     'cedron_complex': est_f_cedron_complex,
     'cedron_3bin': est_f_cedron_3bin,
     'cedron_2bin': est_f_cedron_2bin,
+    'cedron_3bin_complex': est_f_cedron_3bin_complex,
     'cedron_jacobsen': est_f_cedron_jacobsen,
     'kay_1': est_f_kay_1,
     'kay_2': est_f_kay_2,

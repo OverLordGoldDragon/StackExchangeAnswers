@@ -21,18 +21,26 @@ snrs_db_practical = np.linspace(-10, 50,  100)
 snrs_db_wide      = np.linspace(100, 300, 50)
 
 # Testing ####################################################################
-def make_x(N, f, snr, _base_arg=None, get_xo=False):
+def make_x(N, f, snr, _base_arg=None, get_xo=False, real=True):
     if _base_arg is None:
         _base_arg = 2*np.pi*f*np.arange(N)/N
+
     phi = np.random.uniform(0, 1) * (2*np.pi)
-    xo = np.cos(_base_arg + phi)
+    if real:
+        xo = np.cos(_base_arg + phi)
+    else:
+        xo = np.cos(_base_arg + phi) + 1j*np.sin(_base_arg + phi)
+
     noise_var = xo.var() / 10**(snr/10)
-    noise = np.random.randn(N) * np.sqrt(noise_var)
+    if real:
+        noise = randn(N) * np.sqrt(noise_var)
+    else:
+        noise = crandn(N) * np.sqrt(noise_var)
     x = xo + noise
     return x if not get_xo else (x, xo)
 
 
-def run_test(f_N_all, N, n_trials, name0, name1, seed=0,
+def run_test(f_N_all, N, n_trials, name0, name1, real=True, seed=0,
              sweep_mode='practical', snrs=None, verbose=True):
     # execute some configs
     if snrs is None:
@@ -45,7 +53,7 @@ def run_test(f_N_all, N, n_trials, name0, name1, seed=0,
     errs0_all, errs1_all = {}, {}
     for f_N in f_N_all:
         f = f_N * N
-        errs0, errs1 = _run_test(f, N, n_trials, name0, name1, snrs, seed)
+        errs0, errs1 = _run_test(f, N, n_trials, name0, name1, snrs, real, seed)
         errs0_all[f_N] = errs0
         errs1_all[f_N] = errs1
 
@@ -55,7 +63,8 @@ def run_test(f_N_all, N, n_trials, name0, name1, seed=0,
     crlbs = compute_crlbs(N, snrs, T=1)
     return errs0_all, errs1_all, snrs, crlbs
 
-def _run_test(f, N, n_trials, name0, name1, snrs, seed):
+
+def _run_test(f, N, n_trials, name0, name1, snrs, real, seed):
     np.random.seed(seed)
     _base_arg = 2*np.pi*f*np.arange(N)/N
 
@@ -64,9 +73,9 @@ def _run_test(f, N, n_trials, name0, name1, snrs, seed):
         errs0[snr], errs1[snr] = [], []
 
         for _ in range(n_trials):
-            x = make_x(N, f, snr, _base_arg)
+            x = make_x(N, f, snr, _base_arg, real=real)
 
-            f_est0, f_est1 = est_freq(x, names=(name0, name1))
+            f_est0, f_est1 = est_freq(x, names=(name0, name1), real=real)
             err0 = (f_est0 - f/N)**2
             err1 = (f_est1 - f/N)**2
             errs0[snr].append(err0)
@@ -192,16 +201,22 @@ def _run_viz2(a, b0mn, b1mn, b0sd, b1sd, N, n_freqs, n_trials, snrs, crlbs,
     else:
         fig, ax = figax
 
+    color2 = ('tab:green' if 'kay' in viz_names[1].lower() else
+              'tab:cyan')
+
     if crlbs is not None:
-        ax.plot(a, np.log10(crlbs), linewidth=3)
+        ax.plot(a, np.log10(crlbs),      linewidth=3)
     ax.plot(a, b0mn, color='tab:orange', linewidth=3)
-    ax.plot(a, b1mn, color='tab:cyan',   linewidth=3)
+    ax.plot(a, b1mn, color=color2,       linewidth=3)
     ax.plot(a, b0sd, color='tab:orange', linewidth=2, linestyle='--')
-    ax.plot(a, b1sd, color='tab:cyan',   linewidth=2, linestyle='--')
+    ax.plot(a, b1sd, color=color2,       linewidth=2, linestyle='--')
 
     # configure axes, set title
-    title = ("N={}, Dq_Npad=2048, f/N=lin sweep\n"
-             "n_freqs={}, n_trials_per_freq={}").format(N, n_freqs, n_trials)
+    extra = ("Dq_Npad=2048, " if viz_names[1] == 'DFT_quadratic' else
+             "")
+    title = ("N={},{} f/N=lin sweep\n"
+             "n_freqs={}, n_trials_per_freq={}").format(
+                 N, extra, n_freqs, n_trials)
     _basic_style(ax, ymin, snrs, title, N, n_trials, ylabel=True)
 
     # legends
@@ -260,8 +275,9 @@ def get_viz_data2(*errs_all):
     for errs_re in errs_all_re:
         b = np.array(list(errs_re.values()))
         bmns, bsds = b[..., 0], b[..., 1]
-        # average along frequency
-        bmn, bsd = [np.log10(np.mean(g, axis=0)) for g in (bmns, bsds)]
+        # average along frequency; important to take log first, else
+        # result's dominated by outliers
+        bmn, bsd = [np.mean(np.log10(g), axis=0) for g in (bmns, bsds)]
         bmns_all.append(bmn)
         bsds_all.append(bsd)
 
@@ -380,3 +396,11 @@ def snr_db_amplitude_adjust(snr_db, A):
     10 * log10(G) = snr_db1
     """
     return 10 * np.log10(10**(snr_db/10) * A**2)
+
+
+def randn(N):
+    return np.random.randn(N)
+
+
+def crandn(N):
+    return np.random.randn(N) + 1j*np.random.randn(N)

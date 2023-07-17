@@ -34,6 +34,7 @@ f_N_all_ints_large_N    = f_N_all_nonints_small_N
 #%% Manual testing ###########################################################
 np.random.seed(0)
 name = ('cedron_3bin', 'kay_2', 'dft_quadratic')[0]
+# name = ('cedron_3bin_complex',)[0]
 N = 10000
 f = N*0.053123
 phi = 1
@@ -48,16 +49,18 @@ print(est_freq(x, name) / (f/N), sep='\n')
 seed = 0
 N = 100
 n_trials = 2000
+real = True
 sweep_mode = ('practical', 'wide')[0]
 name0, name1 = 'cedron_3bin', 'kay_2'
 # name0, name1 = 'cedron_3bin', 'dft_quadratic'
-# name0, name1 = 'cedron_3bin', 'cedron_2bin'
+# name0, name1 = 'cedron_3bin_complex', 'kay_2'
 f_N_all = (f_N_all_nonints_small_N, f_N_all_nonints_large_N,
            f_N_all_ints_small_N,    f_N_all_ints_large_N)[0]
 # f_N_all = np.linspace(1/N, .5-1/N, 50)
+# f_N_all = np.linspace(-.5+1/N, .5-1/N, 100)
 
 errs0_all, errs1_all, snrs, crlbs = run_test(
-    f_N_all, N, n_trials, name0, name1, seed, sweep_mode, verbose=VERBOSE)
+    f_N_all, N, n_trials, name0, name1, real, seed, sweep_mode, verbose=VERBOSE)
 
 #%% Visualize ################################################################
 names = ("Cedron", "Kay_2")
