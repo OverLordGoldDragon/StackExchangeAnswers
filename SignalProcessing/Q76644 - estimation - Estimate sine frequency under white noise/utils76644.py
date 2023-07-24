@@ -5,6 +5,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.lines as mlines
 from estimators import est_freq, est_freq_multi
+from timeit import Timer
+from functools import partial
 
 # USER CONFIGS
 # plot options
@@ -21,7 +23,7 @@ snrs_db_practical = np.linspace(-10, 50,  100)
 snrs_db_wide      = np.linspace(100, 300, 50)
 
 # Testing ####################################################################
-def make_x(N, f, snr, _base_arg=None, get_xo=False, real=True):
+def make_x(N, f, snr=None, _base_arg=None, get_xo=False, real=True):
     if _base_arg is None:
         _base_arg = 2*np.pi*f*np.arange(N)/N
 
@@ -31,11 +33,14 @@ def make_x(N, f, snr, _base_arg=None, get_xo=False, real=True):
     else:
         xo = np.cos(_base_arg + phi) + 1j*np.sin(_base_arg + phi)
 
-    noise_var = xo.var() / 10**(snr/10)
-    if real:
-        noise = randn(N) * np.sqrt(noise_var)
+    if snr is not None:
+        noise_var = xo.var() / 10**(snr/10)
+        if real:
+            noise = randn(N) * np.sqrt(noise_var)
+        else:
+            noise = crandn(N) * np.sqrt(noise_var)
     else:
-        noise = crandn(N) * np.sqrt(noise_var)
+        noise = 0
     x = xo + noise
     return x if not get_xo else (x, xo)
 
@@ -212,7 +217,7 @@ def _run_viz2(a, b0mn, b1mn, b0sd, b1sd, N, n_freqs, n_trials, snrs, crlbs,
     ax.plot(a, b1sd, color=color2,       linewidth=2, linestyle='--')
 
     # configure axes, set title
-    extra = ("Dq_Npad=2048, " if viz_names[1] == 'DFT_quadratic' else
+    extra = (" Dq_Npad=2048, " if viz_names[1] == 'DFT_quadratic' else
              "")
     title = ("N={},{} f/N=lin sweep\n"
              "n_freqs={}, n_trials_per_freq={}").format(
@@ -404,3 +409,16 @@ def randn(N):
 
 def crandn(N):
     return np.random.randn(N) + 1j*np.random.randn(N)
+
+
+def cisoid(N, f, phi=0):
+    return (np.cos(2*np.pi*f*np.arange(N)/N + phi) +
+            np.sin(2*np.pi*f*np.arange(N)/N + phi)*1j)
+
+# Benchmarking ###############################################################
+def timeit(fn, args, n_trials=200, repeats=10):
+    """
+    https://stackoverflow.com/a/8220943/10133797
+    https://stackoverflow.com/a/24105845/10133797
+    """
+    return min(Timer(partial(fn, args)).repeat(repeats, n_trials)) / n_trials

@@ -173,7 +173,17 @@ def est_f_cedron_3bin_complex(Z, k, N):
     return f
 
 
-def est_f_cedron_3bin(Z, k, N):
+def est_f_cedron_3bin(x):
+    N = len(x)
+    xf = rfft(x)
+    kmax = np.argmax(np.abs(xf))
+    Z = xf[kmax-1:kmax+2]
+
+    f = _est_f_cedron_3bin(Z, kmax, N)
+    return f
+
+
+def _est_f_cedron_3bin(Z, k, N):
     """
     "Improved Three Bin Exact Frequency Formula for a Pure Real Tone in a DFT",
     Cedron Dawg, Eq 9
@@ -201,7 +211,23 @@ def est_f_cedron_3bin(Z, k, N):
     return f
 
 
-def est_f_cedron_2bin(Z, k, N):
+def est_f_cedron_2bin(x):
+    N = len(x)
+    xf = rfft(x)
+
+    if N == 3:
+        # not necessarily optimal scheme
+        kmax = 1
+        Z = xf
+    else:
+        kmax = np.argmax(np.abs(xf))
+        Z = xf[kmax-1:kmax+1]
+
+    f = _est_f_cedron_2bin(Z, kmax, N)
+    return f
+
+
+def _est_f_cedron_2bin(Z, k, N):
     """
     "A Two Bin Solution", Cedron Dawg, Eq 14
     https://www.dsprelated.com/showarticle/1284.php
@@ -278,8 +304,8 @@ def _postprocess_f_ests(f_ests):
 estimator_fns = {
     'cedron': est_f_cedron,
     'cedron_complex': est_f_cedron_complex,
-    'cedron_3bin': est_f_cedron_3bin,
-    'cedron_2bin': est_f_cedron_2bin,
+    'cedron_3bin': _est_f_cedron_3bin,
+    'cedron_2bin': _est_f_cedron_2bin,
     'cedron_3bin_complex': est_f_cedron_3bin_complex,
     'cedron_jacobsen': est_f_cedron_jacobsen,
     'kay_1': est_f_kay_1,

@@ -204,5 +204,5 @@ for _ in range(n_trials):
     errs_phi.append(err_phi)
 
 SNR = 10*np.log10((A/2)/.05**2)
-print("MSE (log10): A={:.3g}, phi={:.3g} -- SNR={:.3g}, N={}, n_trials={}".format(
+print("MSE: A={:.3g}, phi={:.3g} -- SNR={:.3g}, N={}, n_trials={}".format(
     np.mean(errs_A_alt), np.mean(errs_phi), SNR, N, n_trials))
