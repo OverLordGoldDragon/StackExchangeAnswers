@@ -3,7 +3,7 @@ function out = py_dictcomp(fn_k, fn_v, iterable, cond, cell_values)
     % py_dictcomp
     % Mimics Python's
     %
-    %     {f(k):g(v) for k, v in dict.items() if cond(k, v)}
+    %     {f(k): g(v) for k, v in dict.items() if cond(k, v)}
     %
     % where [f(k), g(v)] = fn(k, v)
     %
@@ -67,8 +67,10 @@ function out = py_dictcomp(fn_k, fn_v, iterable, cond, cell_values)
                 else
                     try
                         out(k) = v;
-                        if ~isnan(v)
-                            assert(isnan(out(k)))
+                        % e.g. first populate with `double` values, then
+                        % `string`, the `string` becomes `NaN` unless cell
+                        if isnan(out(k)) && ~isnan(v)
+                            error("NaN `out(k)` without NAN `v`")
                         end
                     catch e
                         if user_set_cell_values
